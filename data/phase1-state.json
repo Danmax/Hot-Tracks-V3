@@ -1,0 +1,577 @@
+{
+  "users": [
+    {
+      "id": "u_admin",
+      "email": "daniel@example.com",
+      "passwordHash": "demo-hash",
+      "role": "admin",
+      "displayName": "Daniel Maldonado",
+      "createdAt": "2026-03-20T09:00:00Z"
+    },
+    {
+      "id": "u_host_1",
+      "email": "maya@example.com",
+      "passwordHash": "demo-hash",
+      "role": "host",
+      "displayName": "Maya Torque",
+      "createdAt": "2026-03-20T09:05:00Z"
+    },
+    {
+      "id": "u_official_1",
+      "email": "riley@example.com",
+      "passwordHash": "demo-hash",
+      "role": "official",
+      "displayName": "Riley Chase",
+      "createdAt": "2026-03-20T09:10:00Z"
+    },
+    {
+      "id": "u_participant_1",
+      "email": "leo@example.com",
+      "passwordHash": "demo-hash",
+      "role": "participant",
+      "displayName": "Leo Drift",
+      "createdAt": "2026-03-20T09:12:00Z"
+    },
+    {
+      "id": "u_participant_2",
+      "email": "nina@example.com",
+      "passwordHash": "demo-hash",
+      "role": "participant",
+      "displayName": "Nina Apex",
+      "createdAt": "2026-03-20T09:13:00Z"
+    }
+  ],
+  "racerProfiles": [
+    {
+      "id": "r_maya",
+      "userId": "u_host_1",
+      "firstName": "Maya",
+      "lastName": "Torque",
+      "displayName": "Maya Torque",
+      "garageName": "Redline North",
+      "status": "active",
+      "createdAt": "2026-03-20T10:00:00Z"
+    },
+    {
+      "id": "r_leo",
+      "userId": "u_participant_1",
+      "firstName": "Leo",
+      "lastName": "Drift",
+      "displayName": "Leo Drift",
+      "garageName": "Thunder Alley",
+      "status": "active",
+      "createdAt": "2026-03-20T10:02:00Z"
+    },
+    {
+      "id": "r_nina",
+      "userId": "u_participant_2",
+      "firstName": "Nina",
+      "lastName": "Apex",
+      "displayName": "Nina Apex",
+      "garageName": "Chrome Circuit",
+      "status": "active",
+      "createdAt": "2026-03-20T10:04:00Z"
+    },
+    {
+      "id": "r_jace",
+      "userId": null,
+      "firstName": "Jace",
+      "lastName": "Velo",
+      "displayName": "Jace Velo",
+      "garageName": "Redline North",
+      "status": "active",
+      "createdAt": "2026-03-20T10:06:00Z"
+    }
+  ],
+  "cars": [
+    {
+      "id": "c_copper",
+      "ownerRacerId": "r_maya",
+      "nickname": "Copper Comet",
+      "brand": "Hot Wheels",
+      "model": "Bone Shaker",
+      "series": "Mainline",
+      "modelYear": 2024,
+      "category": "Modified",
+      "className": "A-Class",
+      "notes": "Balanced for lane 3 and 4",
+      "status": "race_ready",
+      "createdAt": "2026-03-21T08:00:00Z"
+    },
+    {
+      "id": "c_blue",
+      "ownerRacerId": "r_leo",
+      "nickname": "Blue Blitz",
+      "brand": "Hot Wheels",
+      "model": "Twin Mill",
+      "series": "Mainline",
+      "modelYear": 2025,
+      "category": "Stock",
+      "className": "B-Class",
+      "notes": "Consistent rollout in short heats",
+      "status": "checked_in",
+      "createdAt": "2026-03-21T08:05:00Z"
+    },
+    {
+      "id": "c_neon",
+      "ownerRacerId": "r_nina",
+      "nickname": "Neon Apex",
+      "brand": "Hot Wheels",
+      "model": "24 Ours",
+      "series": "Premium",
+      "modelYear": 2025,
+      "category": "Stock",
+      "className": "A-Class",
+      "notes": "Fastest qualifier on test day",
+      "status": "inspection",
+      "createdAt": "2026-03-21T08:10:00Z"
+    },
+    {
+      "id": "c_phantom",
+      "ownerRacerId": "r_jace",
+      "nickname": "Track Phantom",
+      "brand": "Matchbox",
+      "model": "Lamborghini Gallardo",
+      "series": "Collectors",
+      "modelYear": 2023,
+      "category": "Modified",
+      "className": "A-Class",
+      "notes": "Needs close DQ review on contact calls",
+      "status": "race_ready",
+      "createdAt": "2026-03-21T08:12:00Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "e_garage_clash",
+      "hostUserId": "u_host_1",
+      "name": "Saturday Garage Clash",
+      "description": "Primary live tournament used for Phase 1 validation.",
+      "eventDate": "2026-03-29",
+      "locationName": "Brooklyn Track Loft",
+      "trackName": "Orange Overpass",
+      "trackLengthFeet": 32,
+      "laneCount": 4,
+      "status": "in_progress",
+      "createdAt": "2026-03-21T12:00:00Z"
+    },
+    {
+      "id": "e_family_sprint",
+      "hostUserId": "u_host_1",
+      "name": "Family Sprint Night",
+      "description": "Smaller follow-up event for 2-lane testing.",
+      "eventDate": "2026-04-05",
+      "locationName": "Queens Home Circuit",
+      "trackName": "Basement Dash",
+      "trackLengthFeet": 24,
+      "laneCount": 2,
+      "status": "in_progress",
+      "createdAt": "2026-03-21T12:15:00Z"
+    }
+  ],
+  "eventAssignments": [
+    {
+      "id": "ea_host_garage_clash",
+      "eventId": "e_garage_clash",
+      "userId": "u_host_1",
+      "assignmentRole": "host",
+      "createdAt": "2026-03-21T12:00:00Z"
+    },
+    {
+      "id": "ea_host_family_sprint",
+      "eventId": "e_family_sprint",
+      "userId": "u_host_1",
+      "assignmentRole": "host",
+      "createdAt": "2026-03-21T12:15:00Z"
+    },
+    {
+      "id": "ea_official_garage_clash",
+      "eventId": "e_garage_clash",
+      "userId": "u_official_1",
+      "assignmentRole": "official",
+      "createdAt": "2026-03-28T18:00:00Z"
+    },
+    {
+      "id": "ea_e_family_sprint_u_admin_official",
+      "eventId": "e_family_sprint",
+      "userId": "u_admin",
+      "assignmentRole": "official",
+      "createdAt": "2026-03-23T21:58:22.038Z"
+    },
+    {
+      "id": "ea_e_family_sprint_u_official_1_official",
+      "eventId": "e_family_sprint",
+      "userId": "u_official_1",
+      "assignmentRole": "official",
+      "createdAt": "2026-03-23T22:00:01.073Z"
+    },
+    {
+      "id": "ea_e_family_sprint_u_admin_host",
+      "eventId": "e_family_sprint",
+      "userId": "u_admin",
+      "assignmentRole": "host",
+      "createdAt": "2026-03-23T22:00:06.384Z"
+    }
+  ],
+  "eventRegistrations": [
+    {
+      "id": "reg_1",
+      "eventId": "e_garage_clash",
+      "racerId": "r_maya",
+      "carId": "c_copper",
+      "checkedInAt": "2026-03-29T13:00:00Z",
+      "readyStatus": "ready",
+      "seed": 1,
+      "createdAt": "2026-03-23T09:00:00Z"
+    },
+    {
+      "id": "reg_2",
+      "eventId": "e_garage_clash",
+      "racerId": "r_leo",
+      "carId": "c_blue",
+      "checkedInAt": "2026-03-29T13:01:00Z",
+      "readyStatus": "ready",
+      "seed": 4,
+      "createdAt": "2026-03-23T09:01:00Z"
+    },
+    {
+      "id": "reg_3",
+      "eventId": "e_garage_clash",
+      "racerId": "r_nina",
+      "carId": "c_neon",
+      "checkedInAt": "2026-03-29T13:02:00Z",
+      "readyStatus": "checked_in",
+      "seed": 2,
+      "createdAt": "2026-03-23T09:02:00Z"
+    },
+    {
+      "id": "reg_4",
+      "eventId": "e_garage_clash",
+      "racerId": "r_jace",
+      "carId": "c_phantom",
+      "checkedInAt": "2026-03-29T13:03:00Z",
+      "readyStatus": "ready",
+      "seed": 3,
+      "createdAt": "2026-03-23T09:03:00Z"
+    },
+    {
+      "id": "reg_5",
+      "eventId": "e_family_sprint",
+      "racerId": "r_maya",
+      "carId": "c_copper",
+      "checkedInAt": "2026-03-23T21:59:17.612Z",
+      "readyStatus": "ready",
+      "seed": 1,
+      "createdAt": "2026-03-23T11:00:00Z"
+    },
+    {
+      "id": "reg_6",
+      "eventId": "e_family_sprint",
+      "racerId": "r_leo",
+      "carId": "c_blue",
+      "checkedInAt": "2026-03-23T21:59:22.500Z",
+      "readyStatus": "ready",
+      "seed": 2,
+      "createdAt": "2026-03-23T11:02:00Z"
+    },
+    {
+      "id": "reg_e_family_sprint_131654",
+      "eventId": "e_family_sprint",
+      "racerId": "r_jace",
+      "carId": "c_phantom",
+      "checkedInAt": "2026-03-23T22:00:21.124Z",
+      "readyStatus": "ready",
+      "seed": 3,
+      "createdAt": "2026-03-23T21:58:51.654Z"
+    },
+    {
+      "id": "reg_e_family_sprint_194808",
+      "eventId": "e_family_sprint",
+      "racerId": "r_nina",
+      "carId": "c_neon",
+      "checkedInAt": "2026-03-23T22:00:25.107Z",
+      "readyStatus": "ready",
+      "seed": 4,
+      "createdAt": "2026-03-23T21:59:54.808Z"
+    }
+  ],
+  "tournaments": [
+    {
+      "id": "t_garage_clash",
+      "eventId": "e_garage_clash",
+      "format": "single_elimination",
+      "status": "in_progress",
+      "generatedAt": "2026-03-29T13:15:00Z"
+    },
+    {
+      "id": "t_family_sprint",
+      "eventId": "e_family_sprint",
+      "format": "single_elimination",
+      "status": "draft",
+      "generatedAt": "2026-04-05T17:00:00Z"
+    }
+  ],
+  "matches": [
+    {
+      "id": "m_qf_1",
+      "tournamentId": "t_garage_clash",
+      "roundNumber": 1,
+      "bracketPosition": 1,
+      "status": "completed",
+      "slotARegistrationId": "reg_1",
+      "slotBRegistrationId": "reg_2",
+      "winnerRegistrationId": "reg_1",
+      "nextMatchId": "m_final_1",
+      "notes": "Lane 3 edge by 18ms"
+    },
+    {
+      "id": "m_qf_2",
+      "tournamentId": "t_garage_clash",
+      "roundNumber": 1,
+      "bracketPosition": 2,
+      "status": "completed",
+      "slotARegistrationId": "reg_3",
+      "slotBRegistrationId": "reg_4",
+      "winnerRegistrationId": "reg_3",
+      "nextMatchId": "m_final_1",
+      "notes": "Rerun confirmed before final result"
+    },
+    {
+      "id": "m_final_1",
+      "tournamentId": "t_garage_clash",
+      "roundNumber": 2,
+      "bracketPosition": 1,
+      "status": "ready",
+      "slotARegistrationId": "reg_1",
+      "slotBRegistrationId": "reg_3",
+      "winnerRegistrationId": null,
+      "nextMatchId": null,
+      "notes": "Championship match queued"
+    }
+  ],
+  "heats": [
+    {
+      "id": "h_qf_1",
+      "matchId": "m_qf_1",
+      "heatNumber": 1,
+      "laneCount": 4,
+      "status": "completed"
+    },
+    {
+      "id": "h_qf_2",
+      "matchId": "m_qf_2",
+      "heatNumber": 1,
+      "laneCount": 4,
+      "status": "completed"
+    },
+    {
+      "id": "h_final_1",
+      "matchId": "m_final_1",
+      "heatNumber": 1,
+      "laneCount": 4,
+      "status": "ready"
+    }
+  ],
+  "laneResults": [
+    {
+      "id": "lr_qf_1_1",
+      "heatId": "h_qf_1",
+      "laneNumber": 1,
+      "registrationId": "reg_2",
+      "elapsedMs": 3018,
+      "finishPosition": 2,
+      "resultStatus": "finished"
+    },
+    {
+      "id": "lr_qf_1_2",
+      "heatId": "h_qf_1",
+      "laneNumber": 3,
+      "registrationId": "reg_1",
+      "elapsedMs": 3000,
+      "finishPosition": 1,
+      "resultStatus": "finished"
+    },
+    {
+      "id": "lr_qf_2_1",
+      "heatId": "h_qf_2",
+      "laneNumber": 2,
+      "registrationId": "reg_4",
+      "elapsedMs": null,
+      "finishPosition": 2,
+      "resultStatus": "dq"
+    },
+    {
+      "id": "lr_qf_2_2",
+      "heatId": "h_qf_2",
+      "laneNumber": 4,
+      "registrationId": "reg_3",
+      "elapsedMs": 2988,
+      "finishPosition": 1,
+      "resultStatus": "finished"
+    },
+    {
+      "id": "lr_final_1_1",
+      "heatId": "h_final_1",
+      "laneNumber": 1,
+      "registrationId": "reg_1",
+      "elapsedMs": null,
+      "finishPosition": null,
+      "resultStatus": "pending"
+    },
+    {
+      "id": "lr_final_1_2",
+      "heatId": "h_final_1",
+      "laneNumber": 4,
+      "registrationId": "reg_3",
+      "elapsedMs": null,
+      "finishPosition": null,
+      "resultStatus": "pending"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "a_1",
+      "actorUserId": "u_host_1",
+      "entityType": "match",
+      "entityId": "m_qf_1",
+      "action": "result_recorded",
+      "metadataJson": "{\"winnerRegistrationId\":\"reg_1\",\"note\":\"Manual official entry\"}",
+      "createdAt": "2026-03-29T14:18:00Z"
+    },
+    {
+      "id": "a_2",
+      "actorUserId": "u_admin",
+      "entityType": "match",
+      "entityId": "m_qf_2",
+      "action": "match_corrected",
+      "metadataJson": "{\"reason\":\"Rerun confirmed after initial false trigger\"}",
+      "createdAt": "2026-03-29T14:31:00Z"
+    },
+    {
+      "id": "a_3",
+      "actorUserId": "u_admin",
+      "entityType": "user",
+      "entityId": "u_official_1",
+      "action": "role_confirmed",
+      "metadataJson": "{\"eventId\":\"e_garage_clash\",\"role\":\"official\"}",
+      "createdAt": "2026-03-29T15:02:00Z"
+    },
+    {
+      "id": "audit_1774303102038_4",
+      "actorUserId": "u_admin",
+      "entityType": "event_assignment",
+      "entityId": "ea_e_family_sprint_u_admin_official",
+      "action": "assignment_created",
+      "metadataJson": "{\"eventId\":\"e_family_sprint\",\"userId\":\"u_admin\",\"assignmentRole\":\"official\"}",
+      "createdAt": "2026-03-23T21:58:22.038Z"
+    },
+    {
+      "id": "audit_1774303122942_5",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_6",
+      "action": "registration_status_updated",
+      "metadataJson": "{\"readyStatus\":\"checked_in\",\"eventId\":\"e_family_sprint\"}",
+      "createdAt": "2026-03-23T21:58:42.942Z"
+    },
+    {
+      "id": "audit_1774303131654_6",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_e_family_sprint_131654",
+      "action": "registration_created",
+      "metadataJson": "{\"eventId\":\"e_family_sprint\",\"racerId\":\"r_jace\",\"carId\":\"c_phantom\"}",
+      "createdAt": "2026-03-23T21:58:51.654Z"
+    },
+    {
+      "id": "audit_1774303150472_7",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_5",
+      "action": "registration_status_updated",
+      "metadataJson": "{\"readyStatus\":\"checked_in\",\"eventId\":\"e_family_sprint\"}",
+      "createdAt": "2026-03-23T21:59:10.472Z"
+    },
+    {
+      "id": "audit_1774303157612_8",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_5",
+      "action": "registration_status_updated",
+      "metadataJson": "{\"readyStatus\":\"ready\",\"eventId\":\"e_family_sprint\"}",
+      "createdAt": "2026-03-23T21:59:17.612Z"
+    },
+    {
+      "id": "audit_1774303162500_9",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_6",
+      "action": "registration_status_updated",
+      "metadataJson": "{\"readyStatus\":\"ready\",\"eventId\":\"e_family_sprint\"}",
+      "createdAt": "2026-03-23T21:59:22.500Z"
+    },
+    {
+      "id": "audit_1774303180007_10",
+      "actorUserId": "u_admin",
+      "entityType": "event",
+      "entityId": "e_family_sprint",
+      "action": "event_status_updated",
+      "metadataJson": "{\"status\":\"in_progress\"}",
+      "createdAt": "2026-03-23T21:59:40.007Z"
+    },
+    {
+      "id": "audit_1774303194808_11",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_e_family_sprint_194808",
+      "action": "registration_created",
+      "metadataJson": "{\"eventId\":\"e_family_sprint\",\"racerId\":\"r_nina\",\"carId\":\"c_neon\"}",
+      "createdAt": "2026-03-23T21:59:54.808Z"
+    },
+    {
+      "id": "audit_1774303201074_12",
+      "actorUserId": "u_admin",
+      "entityType": "event_assignment",
+      "entityId": "ea_e_family_sprint_u_official_1_official",
+      "action": "assignment_created",
+      "metadataJson": "{\"eventId\":\"e_family_sprint\",\"userId\":\"u_official_1\",\"assignmentRole\":\"official\"}",
+      "createdAt": "2026-03-23T22:00:01.074Z"
+    },
+    {
+      "id": "audit_1774303206384_13",
+      "actorUserId": "u_admin",
+      "entityType": "event_assignment",
+      "entityId": "ea_e_family_sprint_u_admin_host",
+      "action": "assignment_created",
+      "metadataJson": "{\"eventId\":\"e_family_sprint\",\"userId\":\"u_admin\",\"assignmentRole\":\"host\"}",
+      "createdAt": "2026-03-23T22:00:06.384Z"
+    },
+    {
+      "id": "audit_1774303216102_14",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_e_family_sprint_131654",
+      "action": "registration_status_updated",
+      "metadataJson": "{\"readyStatus\":\"checked_in\",\"eventId\":\"e_family_sprint\"}",
+      "createdAt": "2026-03-23T22:00:16.102Z"
+    },
+    {
+      "id": "audit_1774303221124_15",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_e_family_sprint_131654",
+      "action": "registration_status_updated",
+      "metadataJson": "{\"readyStatus\":\"ready\",\"eventId\":\"e_family_sprint\"}",
+      "createdAt": "2026-03-23T22:00:21.124Z"
+    },
+    {
+      "id": "audit_1774303225107_16",
+      "actorUserId": "u_admin",
+      "entityType": "registration",
+      "entityId": "reg_e_family_sprint_194808",
+      "action": "registration_status_updated",
+      "metadataJson": "{\"readyStatus\":\"ready\",\"eventId\":\"e_family_sprint\"}",
+      "createdAt": "2026-03-23T22:00:25.107Z"
+    }
+  ]
+}
