@@ -1,6 +1,7 @@
 export type UserRole = "admin" | "host" | "official" | "participant";
 export type RacerStatus = "active" | "inactive" | "archived";
 export type CarStatus = "inspection" | "checked_in" | "race_ready" | "archived";
+export type TrackStatus = "active" | "archived";
 export type EventStatus =
   | "draft"
   | "registration_open"
@@ -9,10 +10,13 @@ export type EventStatus =
   | "completed";
 export type RegistrationStatus = "registered" | "checked_in" | "ready" | "withdrawn";
 export type TournamentStatus = "draft" | "generated" | "in_progress" | "completed";
-export type MatchStatus = "pending" | "ready" | "in_progress" | "completed" | "corrected";
+export type MatchStatus = "pending" | "ready" | "in_progress" | "completed" | "corrected" | "tied";
 export type HeatStatus = "pending" | "ready" | "in_progress" | "completed";
 export type LaneResultStatus = "pending" | "finished" | "dnf" | "dq" | "rerun";
 export type EventAssignmentRole = "host" | "official";
+export type TimingMode = "manual_entry" | "track_timer";
+export type StartMode = "manual_gate" | "electronic_gate";
+export type TiePolicy = "rerun" | "official_review";
 
 export interface User {
   id: string;
@@ -49,6 +53,20 @@ export interface Car {
   createdAt: string;
 }
 
+export interface Track {
+  id: string;
+  name: string;
+  locationName: string | null;
+  trackLengthInches: number | null;
+  laneCount: 2 | 4;
+  surfaceType: string | null;
+  notes: string | null;
+  status: TrackStatus;
+  defaultTimingMode: TimingMode;
+  defaultStartMode: StartMode;
+  createdAt: string;
+}
+
 export interface Event {
   id: string;
   hostUserId: string;
@@ -56,9 +74,13 @@ export interface Event {
   description: string | null;
   eventDate: string;
   locationName: string | null;
+  trackId: string | null;
   trackName: string | null;
-  trackLengthFeet: number | null;
+  trackLengthInches: number | null;
   laneCount: 2 | 4;
+  timingMode: TimingMode;
+  startMode: StartMode;
+  tiePolicy: TiePolicy;
   status: EventStatus;
   createdAt: string;
 }
@@ -135,6 +157,7 @@ export interface Phase1State {
   users: User[];
   racerProfiles: RacerProfile[];
   cars: Car[];
+  tracks: Track[];
   events: Event[];
   eventAssignments: EventAssignment[];
   eventRegistrations: EventRegistration[];

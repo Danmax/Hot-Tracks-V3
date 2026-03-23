@@ -17,9 +17,13 @@ INSERT INTO cars (id, owner_racer_id, nickname, brand, model, series, model_year
   ('c_neon', 'r_nina', 'Neon Apex', 'Hot Wheels', '24 Ours', 'Premium', 2025, 'Stock', 'A-Class', 'Fastest qualifier on test day', 'inspection', '2026-03-21T08:10:00Z'),
   ('c_phantom', 'r_jace', 'Track Phantom', 'Matchbox', 'Lamborghini Gallardo', 'Collectors', 2023, 'Modified', 'A-Class', 'Needs close DQ review on contact calls', 'race_ready', '2026-03-21T08:12:00Z');
 
-INSERT INTO events (id, host_user_id, name, description, event_date, location_name, track_name, track_length_feet, lane_count, status, created_at) VALUES
-  ('e_garage_clash', 'u_host_1', 'Saturday Garage Clash', 'Primary live tournament used for Phase 1 validation.', '2026-03-29', 'Brooklyn Track Loft', 'Orange Overpass', 32, 4, 'in_progress', '2026-03-21T12:00:00Z'),
-  ('e_family_sprint', 'u_host_1', 'Family Sprint Night', 'Smaller follow-up event for 2-lane testing.', '2026-04-05', 'Queens Home Circuit', 'Basement Dash', 24, 2, 'checkin', '2026-03-21T12:15:00Z');
+INSERT INTO tracks (id, name, location_name, track_length_inches, lane_count, surface_type, notes, status, default_timing_mode, default_start_mode, created_at) VALUES
+  ('trk_orange_overpass', 'Orange Overpass', 'Brooklyn Track Loft', 194, 4, 'Hot Wheels orange', 'Primary club raceway with timer bridge.', 'active', 'track_timer', 'electronic_gate', '2026-03-21T07:30:00Z'),
+  ('trk_basement_dash', 'Basement Dash', 'Queens Home Circuit', 288, 2, 'Hybrid plastic and wood risers', 'Compact home setup for fast two-lane events.', 'active', 'manual_entry', 'manual_gate', '2026-03-21T07:45:00Z');
+
+INSERT INTO events (id, host_user_id, name, description, event_date, location_name, track_id, track_name, track_length_inches, lane_count, timing_mode, start_mode, tie_policy, status, created_at) VALUES
+  ('e_garage_clash', 'u_host_1', 'Saturday Garage Clash', 'Primary live tournament used for Phase 1 validation.', '2026-03-29', 'Brooklyn Track Loft', 'trk_orange_overpass', 'Orange Overpass', 194, 4, 'track_timer', 'electronic_gate', 'rerun', 'in_progress', '2026-03-21T12:00:00Z'),
+  ('e_family_sprint', 'u_host_1', 'Family Sprint Night', 'Smaller follow-up event for 2-lane testing.', '2026-04-05', 'Queens Home Circuit', 'trk_basement_dash', 'Basement Dash', 288, 2, 'manual_entry', 'manual_gate', 'rerun', 'checkin', '2026-03-21T12:15:00Z');
 
 INSERT INTO event_assignments (id, event_id, user_id, assignment_role, created_at) VALUES
   ('ea_host_garage_clash', 'e_garage_clash', 'u_host_1', 'host', '2026-03-21T12:00:00Z'),

@@ -6,6 +6,7 @@ import { getAccessibleEventIds, requireUser } from "@/lib/auth";
 import {
   createEventAction,
   createEventAssignmentAction,
+  deleteEventAction,
   removeEventAssignmentAction,
   updateEventDetailsAction,
   updateEventStatusAction,
@@ -57,11 +58,37 @@ export default async function EventsPage({
             </label>
             <label className="form-field">
               <span>Track</span>
-              <input name="trackName" placeholder="Orange Overpass" type="text" />
+              <select defaultValue="" name="trackId" required>
+                <option disabled value="">
+                  Select track
+                </option>
+                {events[0]?.trackOptions.map((track) => (
+                  <option key={track.id} value={track.id}>
+                    {track.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="form-field">
-              <span>Track length (ft)</span>
-              <input inputMode="decimal" name="trackLengthFeet" placeholder="32" type="text" />
+              <span>Timing mode</span>
+              <select defaultValue="manual_entry" name="timingMode">
+                <option value="manual_entry">Manual Entry</option>
+                <option value="track_timer">Track Timer</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Start mode</span>
+              <select defaultValue="manual_gate" name="startMode">
+                <option value="manual_gate">Manual Gate</option>
+                <option value="electronic_gate">Electronic Gate</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Tie policy</span>
+              <select defaultValue="rerun" name="tiePolicy">
+                <option value="rerun">Rerun</option>
+                <option value="official_review">Official Review</option>
+              </select>
             </label>
             <label className="form-field form-field-span-full">
               <span>Description</span>
@@ -70,13 +97,6 @@ export default async function EventsPage({
                 placeholder="What should hosts and officials know about this event?"
                 rows={3}
               />
-            </label>
-            <label className="form-field">
-              <span>Lane count</span>
-              <select defaultValue="4" name="laneCount">
-                <option value="2">2 lanes</option>
-                <option value="4">4 lanes</option>
-              </select>
             </label>
             <label className="form-field">
               <span>Status</span>
@@ -104,6 +124,9 @@ export default async function EventsPage({
                 <h3>{event.name}</h3>
                 <p className="muted">
                   {event.date} • {event.location} • Track: {event.trackName} • {event.trackLength} • Host: {event.hostName}
+                </p>
+                <p className="muted">
+                  {event.timingMode} • {event.startMode} • Tie policy: {event.tiePolicy}
                 </p>
                 {event.descriptionValue ? <p className="muted">{event.descriptionValue}</p> : null}
               </div>
@@ -142,44 +165,44 @@ export default async function EventsPage({
                   </label>
                   <label className="form-field">
                     <span>Track</span>
-                    <input defaultValue={event.trackNameValue} name="trackName" type="text" />
+                    <select defaultValue={event.trackId} name="trackId" required>
+                      {event.trackOptions.map((track) => (
+                        <option key={track.id} value={track.id}>
+                          {track.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="form-field">
-                    <span>Track length (ft)</span>
-                    <input
-                      defaultValue={event.trackLengthValue}
-                      inputMode="decimal"
-                      name="trackLengthFeet"
-                      type="text"
-                    />
+                    <span>Timing mode</span>
+                    <select defaultValue={event.timingModeValue} name="timingMode">
+                      <option value="manual_entry">Manual Entry</option>
+                      <option value="track_timer">Track Timer</option>
+                    </select>
                   </label>
                   <label className="form-field">
-                    <span>Lane count</span>
-                    {event.canEditLaneCount ? (
-                      <select defaultValue={String(event.laneCount)} name="laneCount">
-                        <option value="2">2 lanes</option>
-                        <option value="4">4 lanes</option>
-                      </select>
-                    ) : (
-                      <>
-                        <select defaultValue={String(event.laneCount)} disabled>
-                          <option value="2">2 lanes</option>
-                          <option value="4">4 lanes</option>
-                        </select>
-                        <input name="laneCount" type="hidden" value={String(event.laneCount)} />
-                      </>
-                    )}
+                    <span>Start mode</span>
+                    <select defaultValue={event.startModeValue} name="startMode">
+                      <option value="manual_gate">Manual Gate</option>
+                      <option value="electronic_gate">Electronic Gate</option>
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Tie policy</span>
+                    <select defaultValue={event.tiePolicyValue} name="tiePolicy">
+                      <option value="rerun">Rerun</option>
+                      <option value="official_review">Official Review</option>
+                    </select>
                   </label>
                   <label className="form-field form-field-span-full">
                     <span>Description</span>
                     <textarea defaultValue={event.descriptionValue} name="description" rows={3} />
                   </label>
                   <div className="form-note form-field-span-full">
-                    <p className="list-title">Lane count rule</p>
+                    <p className="list-title">Track rule</p>
                     <p className="list-meta">
-                      {event.canEditLaneCount
-                        ? "Lane count can still change because bracket structure has not been generated yet."
-                        : "Lane count is locked because the bracket already established the event structure."}
+                      Track selection drives lane count and length. If bracket structure is already locked,
+                      choose a track with the same lane count as the current event.
                     </p>
                   </div>
                   <FormSubmitButton
@@ -206,6 +229,22 @@ export default async function EventsPage({
                     className="button secondary compact-button"
                     idleLabel="Save Status"
                     pendingLabel="Saving..."
+                  />
+                </form>
+
+                <form action={deleteEventAction} className="status-form">
+                  <input name="eventId" type="hidden" value={event.id} />
+                  <input name="returnTo" type="hidden" value="/events" />
+                  <div className="form-note">
+                    <p className="list-title">Delete event</p>
+                    <p className="list-meta">{event.deleteHelpText}</p>
+                  </div>
+                  <FormSubmitButton
+                    className="button secondary compact-button"
+                    confirmMessage={`Delete ${event.name}? This removes its roster, assignments, and setup data.`}
+                    disabled={!event.canDelete}
+                    idleLabel="Delete Event"
+                    pendingLabel="Deleting..."
                   />
                 </form>
 

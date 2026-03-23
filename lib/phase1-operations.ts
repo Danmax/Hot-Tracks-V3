@@ -2,6 +2,7 @@ import "server-only";
 
 import { updateState } from "@/lib/phase1-repository";
 import type {
+  CarStatus,
   EventAssignmentRole,
   EventRegistration,
   EventStatus,
@@ -9,7 +10,12 @@ import type {
   LaneResult,
   Match,
   Phase1State,
+  RacerStatus,
   RegistrationStatus,
+  StartMode,
+  TiePolicy,
+  TimingMode,
+  TrackStatus,
   Tournament,
 } from "@/lib/types";
 
@@ -17,8 +23,40 @@ function getTournamentForEvent(state: Phase1State, eventId: string) {
   return state.tournaments.find((tournament) => tournament.eventId === eventId) ?? null;
 }
 
+function getTrackById(state: Phase1State, trackId: string | null | undefined) {
+  if (!trackId) {
+    return null;
+  }
+
+  return state.tracks.find((track) => track.id === trackId) ?? null;
+}
+
 function eventLaneNumbers(laneCount: 2 | 4) {
   return laneCount === 4 ? [1, 4] : [1, 2];
+}
+
+function getHeatsForMatch(state: Phase1State, matchId: string) {
+  return state.heats
+    .filter((heat) => heat.matchId === matchId)
+    .sort((left, right) => left.heatNumber - right.heatNumber);
+}
+
+function createHeat(state: Phase1State, match: Match, laneCount: 2 | 4, heatNumber: number) {
+  const heat: Heat = {
+    id: `${match.id}_heat_${heatNumber}`,
+    matchId: match.id,
+    heatNumber,
+    laneCount,
+    status:
+      match.status === "completed"
+        ? "completed"
+        : match.status === "ready" || match.status === "corrected" || match.status === "tied"
+          ? "ready"
+          : "pending",
+  };
+
+  state.heats.push(heat);
+  return heat;
 }
 
 function ensureTournament(state: Phase1State, eventId: string) {
@@ -40,26 +78,14 @@ function ensureTournament(state: Phase1State, eventId: string) {
 }
 
 function ensureHeat(state: Phase1State, match: Match, laneCount: 2 | 4) {
-  const existing = state.heats.find((heat) => heat.matchId === match.id);
-  if (existing) {
-    return existing;
+  const heats = getHeatsForMatch(state, match.id);
+  const activeHeat = heats.findLast((heat) => heat.status !== "completed");
+  if (activeHeat) {
+    return activeHeat;
   }
 
-  const heat: Heat = {
-    id: `${match.id}_heat_1`,
-    matchId: match.id,
-    heatNumber: 1,
-    laneCount,
-    status:
-      match.status === "completed"
-        ? "completed"
-        : match.status === "ready" || match.status === "corrected"
-          ? "ready"
-          : "pending",
-  };
-
-  state.heats.push(heat);
-  return heat;
+  const nextHeatNumber = (heats.at(-1)?.heatNumber ?? 0) + 1;
+  return createHeat(state, match, laneCount, nextHeatNumber);
 }
 
 function syncLaneResults(state: Phase1State, match: Match, laneCount: 2 | 4) {
@@ -116,7 +142,7 @@ function syncLaneResults(state: Phase1State, match: Match, laneCount: 2 | 4) {
   heat.status =
     match.status === "completed"
       ? "completed"
-      : match.status === "ready" || match.status === "corrected"
+      : match.status === "ready" || match.status === "corrected" || match.status === "tied"
         ? "ready"
         : "pending";
 }
@@ -159,6 +185,17 @@ function clearLaneResultsForMatch(state: Phase1State, match: Match, laneCount: 2
   match.status =
     match.slotARegistrationId && match.slotBRegistrationId ? "corrected" : "pending";
   syncLaneResults(state, match, laneCount);
+}
+
+function resetHeatsForMatch(state: Phase1State, matchId: string) {
+  const heatIds = state.heats.filter((heat) => heat.matchId === matchId).map((heat) => heat.id);
+  if (heatIds.length === 0) {
+    return;
+  }
+
+  const heatIdSet = new Set(heatIds);
+  state.heats = state.heats.filter((heat) => !heatIdSet.has(heat.id));
+  state.laneResults = state.laneResults.filter((laneResult) => !heatIdSet.has(laneResult.heatId));
 }
 
 function assignWinnerToNextMatch(state: Phase1State, match: Match, laneCount: 2 | 4) {
@@ -251,6 +288,9 @@ function refreshEventStatus(state: Phase1State, eventId: string) {
   }
 
   const eventMatches = state.matches.filter((match) => match.tournamentId === tournament.id);
+  const anyStarted = eventMatches.some((match) =>
+    ["in_progress", "corrected", "tied", "completed"].includes(match.status),
+  );
   const anyCompleted = eventMatches.some((match) => match.status === "completed");
   const allCompleted = eventMatches.length > 0 && eventMatches.every((match) => match.status === "completed");
 
@@ -261,7 +301,7 @@ function refreshEventStatus(state: Phase1State, eventId: string) {
   }
 
   if (eventMatches.length > 0) {
-    tournament.status = anyCompleted ? "in_progress" : "generated";
+    tournament.status = anyCompleted || anyStarted ? "in_progress" : "generated";
     event.status = "in_progress";
   }
 }
@@ -273,6 +313,27 @@ function isRosterLocked(state: Phase1State, eventId: string) {
   }
 
   return state.matches.some((match) => match.tournamentId === tournament.id);
+}
+
+function canDeleteEvent(state: Phase1State, eventId: string) {
+  if (state.events.length <= 1) {
+    return {
+      allowed: false,
+      reason: "At least one event must remain in the system",
+    };
+  }
+
+  if (isRosterLocked(state, eventId)) {
+    return {
+      allowed: false,
+      reason: "Events cannot be deleted after bracket generation",
+    };
+  }
+
+  return {
+    allowed: true,
+    reason: null,
+  };
 }
 
 function resequenceEventRegistrations(state: Phase1State, eventId: string) {
@@ -309,20 +370,62 @@ function makeSlug(value: string) {
     .replace(/^_+|_+$/g, "");
 }
 
+function canArchiveRacer(state: Phase1State, racerId: string) {
+  const activeRegistrations = state.eventRegistrations.filter(
+    (registration) => registration.racerId === racerId && registration.readyStatus !== "withdrawn",
+  );
+
+  if (activeRegistrations.length > 0) {
+    return {
+      allowed: false,
+      reason: "Racer with active event registrations cannot be archived",
+    };
+  }
+
+  return {
+    allowed: true,
+    reason: null,
+  };
+}
+
+function canArchiveCar(state: Phase1State, carId: string) {
+  const activeRegistrations = state.eventRegistrations.filter(
+    (registration) => registration.carId === carId && registration.readyStatus !== "withdrawn",
+  );
+
+  if (activeRegistrations.length > 0) {
+    return {
+      allowed: false,
+      reason: "Car with active event registrations cannot be archived",
+    };
+  }
+
+  return {
+    allowed: true,
+    reason: null,
+  };
+}
+
 export function createEvent(
   input: {
     name: string;
     eventDate: string;
     locationName: string;
-    trackName: string;
-    trackLengthFeet: number | null;
+    trackId: string;
     description?: string;
-    laneCount: 2 | 4;
+    timingMode: TimingMode;
+    startMode: StartMode;
+    tiePolicy: TiePolicy;
     status: EventStatus;
   },
   actorUserId: string,
 ) {
   updateState((state) => {
+    const track = getTrackById(state, input.trackId);
+    if (!track || track.status === "archived") {
+      throw new Error("Active track is required");
+    }
+
     const eventId = `e_${makeSlug(input.name)}_${Date.now().toString().slice(-6)}`;
 
     state.events.push({
@@ -331,10 +434,14 @@ export function createEvent(
       name: input.name,
       description: input.description?.trim() || "Host-created Phase 1 event.",
       eventDate: input.eventDate,
-      locationName: input.locationName || null,
-      trackName: input.trackName.trim() || null,
-      trackLengthFeet: input.trackLengthFeet,
-      laneCount: input.laneCount,
+      locationName: input.locationName.trim() || track.locationName || null,
+      trackId: track.id,
+      trackName: track.name,
+      trackLengthInches: track.trackLengthInches,
+      laneCount: track.laneCount,
+      timingMode: input.timingMode,
+      startMode: input.startMode,
+      tiePolicy: input.tiePolicy,
       status: input.status,
       createdAt: new Date().toISOString(),
     });
@@ -356,10 +463,401 @@ export function createEvent(
     });
 
     appendAudit(state, actorUserId, "event", eventId, "event_created", {
+      laneCount: track.laneCount,
+      status: input.status,
+      trackId: track.id,
+      timingMode: input.timingMode,
+      startMode: input.startMode,
+      tiePolicy: input.tiePolicy,
+    });
+
+    return state;
+  });
+}
+
+export function createRacerProfile(
+  input: {
+    firstName: string;
+    lastName: string;
+    displayName: string;
+    garageName: string;
+    status: RacerStatus;
+  },
+  actorUserId: string,
+) {
+  updateState((state) => {
+    const firstName = input.firstName.trim();
+    const lastName = input.lastName.trim();
+
+    if (!firstName || !lastName) {
+      throw new Error("First and last name are required");
+    }
+
+    const displayName = input.displayName.trim() || `${firstName} ${lastName}`;
+    const racerId = `r_${makeSlug(displayName)}_${Date.now().toString().slice(-6)}`;
+
+    state.racerProfiles.push({
+      id: racerId,
+      userId: null,
+      firstName,
+      lastName,
+      displayName,
+      garageName: input.garageName.trim() || null,
+      status:
+        input.status === "inactive" || input.status === "archived" ? input.status : "active",
+      createdAt: new Date().toISOString(),
+    });
+
+    appendAudit(state, actorUserId, "racer", racerId, "racer_created", {
+      displayName,
+      garageName: input.garageName.trim() || null,
+    });
+
+    return state;
+  });
+}
+
+export function createCar(
+  input: {
+    ownerRacerId: string;
+    nickname: string;
+    brand: string;
+    model: string;
+    series: string;
+    modelYear: number | null;
+    category: string;
+    className: string;
+    notes: string;
+    status: CarStatus;
+  },
+  actorUserId: string,
+) {
+  updateState((state) => {
+    const owner = state.racerProfiles.find((item) => item.id === input.ownerRacerId);
+    if (!owner) {
+      throw new Error("Owner racer not found");
+    }
+
+    if (owner.status === "archived") {
+      throw new Error("Archived racers cannot own active cars");
+    }
+
+    const nickname = input.nickname.trim();
+    const brand = input.brand.trim();
+    const model = input.model.trim();
+    if (!nickname || !brand || !model) {
+      throw new Error("Nickname, brand, and model are required");
+    }
+
+    const carId = `c_${makeSlug(nickname)}_${Date.now().toString().slice(-6)}`;
+    state.cars.push({
+      id: carId,
+      ownerRacerId: input.ownerRacerId,
+      nickname,
+      brand,
+      model,
+      series: input.series.trim() || null,
+      modelYear: input.modelYear,
+      category: input.category.trim() || null,
+      className: input.className.trim() || null,
+      notes: input.notes.trim() || null,
+      status: input.status,
+      createdAt: new Date().toISOString(),
+    });
+
+    appendAudit(state, actorUserId, "car", carId, "car_created", {
+      ownerRacerId: input.ownerRacerId,
+      nickname,
+      status: input.status,
+    });
+
+    return state;
+  });
+}
+
+export function updateCar(
+  carId: string,
+  input: {
+    ownerRacerId: string;
+    nickname: string;
+    brand: string;
+    model: string;
+    series: string;
+    modelYear: number | null;
+    category: string;
+    className: string;
+    notes: string;
+    status: CarStatus;
+  },
+  actorUserId: string,
+) {
+  updateState((state) => {
+    const car = state.cars.find((item) => item.id === carId);
+    if (!car) {
+      throw new Error("Car not found");
+    }
+
+    const owner = state.racerProfiles.find((item) => item.id === input.ownerRacerId);
+    if (!owner) {
+      throw new Error("Owner racer not found");
+    }
+
+    if (owner.status === "archived") {
+      throw new Error("Archived racers cannot own active cars");
+    }
+
+    const nickname = input.nickname.trim();
+    const brand = input.brand.trim();
+    const model = input.model.trim();
+    if (!nickname || !brand || !model) {
+      throw new Error("Nickname, brand, and model are required");
+    }
+
+    if (input.status === "archived") {
+      const archiveGuard = canArchiveCar(state, carId);
+      if (!archiveGuard.allowed) {
+        throw new Error(archiveGuard.reason ?? "Car cannot be archived");
+      }
+    }
+
+    car.ownerRacerId = input.ownerRacerId;
+    car.nickname = nickname;
+    car.brand = brand;
+    car.model = model;
+    car.series = input.series.trim() || null;
+    car.modelYear = input.modelYear;
+    car.category = input.category.trim() || null;
+    car.className = input.className.trim() || null;
+    car.notes = input.notes.trim() || null;
+    car.status = input.status;
+
+    appendAudit(state, actorUserId, "car", carId, "car_updated", {
+      ownerRacerId: input.ownerRacerId,
+      nickname,
+      status: input.status,
+    });
+
+    return state;
+  });
+}
+
+export function createTrack(
+  input: {
+    name: string;
+    locationName: string;
+    trackLengthInches: number | null;
+    laneCount: 2 | 4;
+    surfaceType: string;
+    notes: string;
+    status: TrackStatus;
+    defaultTimingMode: TimingMode;
+    defaultStartMode: StartMode;
+  },
+  actorUserId: string,
+) {
+  updateState((state) => {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Track name is required");
+    }
+
+    const trackId = `trk_${makeSlug(name)}_${Date.now().toString().slice(-6)}`;
+    state.tracks.push({
+      id: trackId,
+      name,
+      locationName: input.locationName.trim() || null,
+      trackLengthInches: input.trackLengthInches,
+      laneCount: input.laneCount,
+      surfaceType: input.surfaceType.trim() || null,
+      notes: input.notes.trim() || null,
+      status: input.status,
+      defaultTimingMode: input.defaultTimingMode,
+      defaultStartMode: input.defaultStartMode,
+      createdAt: new Date().toISOString(),
+    });
+
+    appendAudit(state, actorUserId, "track", trackId, "track_created", {
       laneCount: input.laneCount,
       status: input.status,
-      hasTrackName: Boolean(input.trackName.trim()),
-      trackLengthFeet: input.trackLengthFeet,
+      trackLengthInches: input.trackLengthInches,
+      defaultTimingMode: input.defaultTimingMode,
+      defaultStartMode: input.defaultStartMode,
+    });
+
+    return state;
+  });
+}
+
+export function updateTrack(
+  trackId: string,
+  input: {
+    name: string;
+    locationName: string;
+    trackLengthInches: number | null;
+    laneCount: 2 | 4;
+    surfaceType: string;
+    notes: string;
+    status: TrackStatus;
+    defaultTimingMode: TimingMode;
+    defaultStartMode: StartMode;
+  },
+  actorUserId: string,
+) {
+  updateState((state) => {
+    const track = getTrackById(state, trackId);
+    if (!track) {
+      throw new Error("Track not found");
+    }
+
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Track name is required");
+    }
+
+    const inUseEvents = state.events.filter((event) => event.trackId === trackId);
+    if (inUseEvents.some((event) => isRosterLocked(state, event.id) && event.laneCount !== input.laneCount)) {
+      throw new Error("Lane count cannot change for tracks used by bracket-locked events");
+    }
+
+    track.name = name;
+    track.locationName = input.locationName.trim() || null;
+    track.trackLengthInches = input.trackLengthInches;
+    track.laneCount = input.laneCount;
+    track.surfaceType = input.surfaceType.trim() || null;
+    track.notes = input.notes.trim() || null;
+    track.status = input.status;
+    track.defaultTimingMode = input.defaultTimingMode;
+    track.defaultStartMode = input.defaultStartMode;
+
+    inUseEvents.forEach((event) => {
+      event.trackName = track.name;
+      event.trackLengthInches = track.trackLengthInches;
+      event.locationName = event.locationName ?? track.locationName;
+      if (!isRosterLocked(state, event.id)) {
+        event.laneCount = track.laneCount;
+      }
+    });
+
+    appendAudit(state, actorUserId, "track", trackId, "track_updated", {
+      laneCount: input.laneCount,
+      status: input.status,
+      trackLengthInches: input.trackLengthInches,
+      defaultTimingMode: input.defaultTimingMode,
+      defaultStartMode: input.defaultStartMode,
+    });
+
+    return state;
+  });
+}
+
+export function archiveTrack(trackId: string, actorUserId: string) {
+  updateState((state) => {
+    const track = getTrackById(state, trackId);
+    if (!track) {
+      throw new Error("Track not found");
+    }
+
+    const activeEventUsage = state.events.some(
+      (event) => event.trackId === trackId && event.status !== "completed",
+    );
+    if (activeEventUsage) {
+      throw new Error("Tracks assigned to active events cannot be archived");
+    }
+
+    track.status = "archived";
+
+    appendAudit(state, actorUserId, "track", trackId, "track_archived", {
+      name: track.name,
+    });
+
+    return state;
+  });
+}
+
+export function archiveCar(carId: string, actorUserId: string) {
+  updateState((state) => {
+    const car = state.cars.find((item) => item.id === carId);
+    if (!car) {
+      throw new Error("Car not found");
+    }
+
+    const archiveGuard = canArchiveCar(state, carId);
+    if (!archiveGuard.allowed) {
+      throw new Error(archiveGuard.reason ?? "Car cannot be archived");
+    }
+
+    car.status = "archived";
+
+    appendAudit(state, actorUserId, "car", carId, "car_archived", {
+      nickname: car.nickname,
+    });
+
+    return state;
+  });
+}
+
+export function updateRacerProfile(
+  racerId: string,
+  input: {
+    firstName: string;
+    lastName: string;
+    displayName: string;
+    garageName: string;
+    status: "active" | "inactive" | "archived";
+  },
+  actorUserId: string,
+) {
+  updateState((state) => {
+    const racer = state.racerProfiles.find((item) => item.id === racerId);
+    if (!racer) {
+      throw new Error("Racer not found");
+    }
+
+    const firstName = input.firstName.trim();
+    const lastName = input.lastName.trim();
+    if (!firstName || !lastName) {
+      throw new Error("First and last name are required");
+    }
+
+    if (input.status === "archived") {
+      const archiveGuard = canArchiveRacer(state, racerId);
+      if (!archiveGuard.allowed) {
+        throw new Error(archiveGuard.reason ?? "Racer cannot be archived");
+      }
+    }
+
+    racer.firstName = firstName;
+    racer.lastName = lastName;
+    racer.displayName = input.displayName.trim() || `${firstName} ${lastName}`;
+    racer.garageName = input.garageName.trim() || null;
+    racer.status = input.status;
+
+    appendAudit(state, actorUserId, "racer", racerId, "racer_updated", {
+      displayName: racer.displayName,
+      garageName: racer.garageName,
+      status: racer.status,
+    });
+
+    return state;
+  });
+}
+
+export function archiveRacerProfile(racerId: string, actorUserId: string) {
+  updateState((state) => {
+    const racer = state.racerProfiles.find((item) => item.id === racerId);
+    if (!racer) {
+      throw new Error("Racer not found");
+    }
+
+    const archiveGuard = canArchiveRacer(state, racerId);
+    if (!archiveGuard.allowed) {
+      throw new Error(archiveGuard.reason ?? "Racer cannot be archived");
+    }
+
+    racer.status = "archived";
+
+    appendAudit(state, actorUserId, "racer", racerId, "racer_archived", {
+      displayName: racer.displayName,
     });
 
     return state;
@@ -372,10 +870,11 @@ export function updateEventDetails(
     name: string;
     eventDate: string;
     locationName: string;
-    trackName: string;
-    trackLengthFeet: number | null;
+    trackId: string;
     description: string;
-    laneCount: 2 | 4;
+    timingMode: TimingMode;
+    startMode: StartMode;
+    tiePolicy: TiePolicy;
   },
   actorUserId: string,
 ) {
@@ -393,24 +892,110 @@ export function updateEventDetails(
       throw new Error("Event date is required");
     }
 
-    if (isRosterLocked(state, eventId) && input.laneCount !== event.laneCount) {
+    const track = getTrackById(state, input.trackId);
+    if (!track || track.status === "archived") {
+      throw new Error("Active track is required");
+    }
+
+    if (isRosterLocked(state, eventId) && track.laneCount !== event.laneCount) {
       throw new Error("Lane count cannot change after the bracket has been generated");
     }
 
     event.name = input.name.trim();
     event.eventDate = input.eventDate;
-    event.locationName = input.locationName.trim() || null;
-    event.trackName = input.trackName.trim() || null;
-    event.trackLengthFeet = input.trackLengthFeet;
+    event.locationName = input.locationName.trim() || track.locationName || null;
+    event.trackId = track.id;
+    event.trackName = track.name;
+    event.trackLengthInches = track.trackLengthInches;
     event.description = input.description.trim() || null;
-    event.laneCount = input.laneCount;
+    event.laneCount = track.laneCount;
+    event.timingMode = input.timingMode;
+    event.startMode = input.startMode;
+    event.tiePolicy = input.tiePolicy;
 
     appendAudit(state, actorUserId, "event", eventId, "event_details_updated", {
-      laneCount: input.laneCount,
+      laneCount: track.laneCount,
       hasDescription: Boolean(event.description),
       hasLocation: Boolean(event.locationName),
-      hasTrackName: Boolean(event.trackName),
-      trackLengthFeet: event.trackLengthFeet,
+      trackId: track.id,
+      trackLengthInches: event.trackLengthInches,
+      timingMode: event.timingMode,
+      startMode: event.startMode,
+      tiePolicy: event.tiePolicy,
+    });
+
+    return state;
+  });
+}
+
+export function deleteEvent(eventId: string, actorUserId: string) {
+  updateState((state) => {
+    const event = state.events.find((item) => item.id === eventId);
+    if (!event) {
+      throw new Error("Event not found");
+    }
+
+    const deletionGuard = canDeleteEvent(state, eventId);
+    if (!deletionGuard.allowed) {
+      throw new Error(deletionGuard.reason ?? "Event cannot be deleted");
+    }
+
+    const tournament = getTournamentForEvent(state, eventId);
+    const eventAssignments = state.eventAssignments.filter((assignment) => assignment.eventId === eventId);
+    const eventRegistrations = state.eventRegistrations.filter((registration) => registration.eventId === eventId);
+    const registrationIds = new Set(eventRegistrations.map((registration) => registration.id));
+    const assignmentIds = new Set(eventAssignments.map((assignment) => assignment.id));
+    const tournamentId = tournament?.id ?? null;
+    const matchIds = new Set(
+      tournamentId
+        ? state.matches
+            .filter((match) => match.tournamentId === tournamentId)
+            .map((match) => match.id)
+        : [],
+    );
+    const heatIds = new Set(
+      state.heats.filter((heat) => matchIds.has(heat.matchId)).map((heat) => heat.id),
+    );
+
+    state.events = state.events.filter((item) => item.id !== eventId);
+    state.eventAssignments = state.eventAssignments.filter((assignment) => assignment.eventId !== eventId);
+    state.eventRegistrations = state.eventRegistrations.filter((registration) => registration.eventId !== eventId);
+    state.tournaments = state.tournaments.filter((item) => item.eventId !== eventId);
+    state.matches = state.matches.filter((match) => !matchIds.has(match.id));
+    state.heats = state.heats.filter((heat) => !heatIds.has(heat.id));
+    state.laneResults = state.laneResults.filter((laneResult) => !heatIds.has(laneResult.heatId));
+    state.auditLogs = state.auditLogs.filter((log) => {
+      if (log.entityType === "event" && log.entityId === eventId) {
+        return false;
+      }
+
+      if (log.entityType === "event_assignment" && assignmentIds.has(log.entityId)) {
+        return false;
+      }
+
+      if (log.entityType === "registration" && registrationIds.has(log.entityId)) {
+        return false;
+      }
+
+      if (log.entityType === "tournament" && tournamentId && log.entityId === tournamentId) {
+        return false;
+      }
+
+      if (log.entityType === "match" && matchIds.has(log.entityId)) {
+        return false;
+      }
+
+      if (log.entityType === "heat" && heatIds.has(log.entityId)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    appendAudit(state, actorUserId, "event", eventId, "event_deleted", {
+      deletedName: event.name,
+      hadRegistrations: eventRegistrations.length > 0,
+      hadAssignments: eventAssignments.length > 0,
     });
 
     return state;
@@ -879,6 +1464,88 @@ export function recordMatchResult(
   });
 }
 
+export function recordMatchTie(
+  eventId: string,
+  matchId: string,
+  actorUserId: string,
+  note: string,
+  laneTimesMs?: { slotA?: number | null; slotB?: number | null },
+) {
+  updateState((state) => {
+    const event = state.events.find((item) => item.id === eventId);
+    if (!event) {
+      throw new Error("Event not found");
+    }
+
+    const tournament = getTournamentForEvent(state, eventId);
+    if (!tournament) {
+      throw new Error("Tournament not found");
+    }
+
+    const match = state.matches.find((item) => item.id === matchId && item.tournamentId === tournament.id);
+    if (!match) {
+      throw new Error("Match not found");
+    }
+
+    if (!match.slotARegistrationId || !match.slotBRegistrationId) {
+      throw new Error("Both match registrations are required to record a tie");
+    }
+
+    const heat = ensureHeat(state, match, event.laneCount);
+    const [laneA, laneB] = eventLaneNumbers(event.laneCount);
+
+    match.winnerRegistrationId = null;
+    match.status = "tied";
+    match.notes =
+      note.trim() ||
+      (event.tiePolicy === "official_review"
+        ? "Tie recorded. Official review required."
+        : "Tie recorded. Rerun required.");
+
+    const laneAssignments = [
+      {
+        laneNumber: laneA,
+        registrationId: match.slotARegistrationId,
+        elapsedMs: laneTimesMs?.slotA ?? null,
+      },
+      {
+        laneNumber: laneB,
+        registrationId: match.slotBRegistrationId,
+        elapsedMs: laneTimesMs?.slotB ?? null,
+      },
+    ];
+
+    laneAssignments.forEach((assignment) => {
+      const laneResult = state.laneResults.find(
+        (item) => item.heatId === heat.id && item.laneNumber === assignment.laneNumber,
+      );
+      if (!laneResult) {
+        return;
+      }
+
+      laneResult.registrationId = assignment.registrationId;
+      laneResult.elapsedMs = assignment.elapsedMs;
+      laneResult.finishPosition = null;
+      laneResult.resultStatus = "rerun";
+    });
+
+    heat.status = "completed";
+    if (event.tiePolicy === "rerun") {
+      ensureHeat(state, match, event.laneCount);
+      syncLaneResults(state, match, event.laneCount);
+    }
+    refreshEventStatus(state, eventId);
+    appendAudit(state, actorUserId, "match", matchId, "tie_recorded", {
+      note: match.notes,
+      slotAElapsedMs: laneTimesMs?.slotA ?? null,
+      slotBElapsedMs: laneTimesMs?.slotB ?? null,
+      tiePolicy: event.tiePolicy,
+    });
+
+    return state;
+  });
+}
+
 export function reopenMatchForCorrection(
   eventId: string,
   matchId: string,
@@ -901,8 +1568,21 @@ export function reopenMatchForCorrection(
       throw new Error("Match not found");
     }
 
-    if (!match.winnerRegistrationId) {
-      throw new Error("Only completed matches can be reopened");
+    if (!match.winnerRegistrationId && match.status !== "tied") {
+      throw new Error("Only completed or tied matches can be reopened");
+    }
+
+    match.notes = correctionReason.trim() || null;
+
+    if (match.status === "tied") {
+      resetHeatsForMatch(state, match.id);
+      clearLaneResultsForMatch(state, match, event.laneCount);
+      refreshEventStatus(state, eventId);
+      appendAudit(state, actorUserId, "match", matchId, "match_reopened", {
+        reason: correctionReason || "Tie reopened for correction",
+      });
+
+      return state;
     }
 
     clearDescendantMatches(state, match, event.laneCount);

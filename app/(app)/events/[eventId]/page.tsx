@@ -55,6 +55,9 @@ export default async function EventWorkspacePage({
           <p className="hero-copy">
             {event.location} • Track: {event.trackName} • {event.trackLength}
           </p>
+          <p className="hero-copy">
+            {event.timingMode} • {event.startMode} • Tie policy: {event.tiePolicy}
+          </p>
           <p className="hero-copy">{event.description}</p>
         </div>
         <div className="hero-actions align-end">
@@ -106,34 +109,34 @@ export default async function EventWorkspacePage({
             </label>
             <label className="form-field">
               <span>Track</span>
-              <input defaultValue={event.trackNameValue} name="trackName" placeholder="Orange Overpass" type="text" />
+              <select defaultValue={event.trackId} name="trackId" required>
+                {event.trackOptions.map((track) => (
+                  <option key={track.id} value={track.id}>
+                    {track.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="form-field">
-              <span>Track length (ft)</span>
-              <input
-                defaultValue={event.trackLengthValue}
-                inputMode="decimal"
-                name="trackLengthFeet"
-                placeholder="32"
-                type="text"
-              />
+              <span>Timing mode</span>
+              <select defaultValue={event.timingModeValue} name="timingMode">
+                <option value="manual_entry">Manual Entry</option>
+                <option value="track_timer">Track Timer</option>
+              </select>
             </label>
             <label className="form-field">
-              <span>Lane count</span>
-              {event.operations.canEditLaneCount ? (
-                <select defaultValue={String(event.laneCount)} name="laneCount">
-                  <option value="2">2 lanes</option>
-                  <option value="4">4 lanes</option>
-                </select>
-              ) : (
-                <>
-                  <select defaultValue={String(event.laneCount)} disabled>
-                    <option value="2">2 lanes</option>
-                    <option value="4">4 lanes</option>
-                  </select>
-                  <input name="laneCount" type="hidden" value={String(event.laneCount)} />
-                </>
-              )}
+              <span>Start mode</span>
+              <select defaultValue={event.startModeValue} name="startMode">
+                <option value="manual_gate">Manual Gate</option>
+                <option value="electronic_gate">Electronic Gate</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Tie policy</span>
+              <select defaultValue={event.tiePolicyValue} name="tiePolicy">
+                <option value="rerun">Rerun</option>
+                <option value="official_review">Official Review</option>
+              </select>
             </label>
             <label className="form-field form-field-span-full">
               <span>Description</span>
@@ -145,11 +148,10 @@ export default async function EventWorkspacePage({
               />
             </label>
             <div className="form-note form-field-span-full">
-              <p className="list-title">Lane count rule</p>
+              <p className="list-title">Track rule</p>
               <p className="list-meta">
-                {event.operations.canEditLaneCount
-                  ? "Lane count can still change because bracket structure has not been generated yet."
-                  : "Lane count is locked because bracket generation already established race structure for this event."}
+                Track selection drives lane count and track length. If bracket structure is already locked,
+                switch only to tracks with the same lane count as the current event.
               </p>
             </div>
             <FormSubmitButton
@@ -201,11 +203,13 @@ export default async function EventWorkspacePage({
                       <p className="list-title">
                         {match.roundLabel}: {match.slotA} vs {match.slotB}
                       </p>
-                      <p className="list-meta">Manual official entry is the source of truth in Phase 1.</p>
+                      <p className="list-meta">
+                        Manual official entry is the source of truth in Phase 1. {match.tieGuidance}
+                      </p>
                     </div>
                     <label className="form-field">
                       <span>Winner</span>
-                      <select defaultValue="" name="winnerRegistrationId" required>
+                      <select defaultValue="" name="winnerRegistrationId">
                         <option disabled value="">
                           Select winner
                         </option>
@@ -232,8 +236,17 @@ export default async function EventWorkspacePage({
                     </div>
                     <FormSubmitButton
                       className="button primary compact-button"
-                      idleLabel="Record Result"
+                      idleLabel="Record Winner"
                       pendingLabel="Recording..."
+                      submitName="outcome"
+                      submitValue="winner"
+                    />
+                    <FormSubmitButton
+                      className="button secondary compact-button"
+                      idleLabel="Record Tie"
+                      pendingLabel="Recording..."
+                      submitName="outcome"
+                      submitValue="tie"
                     />
                   </form>
                 ))}
@@ -257,7 +270,7 @@ export default async function EventWorkspacePage({
                         Reopen {match.roundLabel}: {match.winner}
                       </p>
                       <p className="list-meta">
-                        This clears the winner and any downstream bracket path that depended on it.
+                        This clears the current winner or tie result and any downstream bracket path that depended on it.
                       </p>
                     </div>
                     <label className="form-field">
@@ -270,7 +283,7 @@ export default async function EventWorkspacePage({
                     </label>
                     <FormSubmitButton
                       className="button secondary compact-button"
-                      confirmMessage="Reopen this completed match and clear any downstream bracket path?"
+                      confirmMessage="Reopen this result and clear any downstream bracket path?"
                       idleLabel="Reopen Match"
                       pendingLabel="Reopening..."
                     />
@@ -535,8 +548,13 @@ export default async function EventWorkspacePage({
                   {match.laneEntries.length > 0 ? (
                     <div className="lane-entry-row">
                       {match.laneEntries.map((laneEntry) => (
-                        <span className="chip" key={`${match.id}-${laneEntry.laneNumber}`}>
-                          L{laneEntry.laneNumber} {laneEntry.label} {laneEntry.elapsedDisplay}
+                        <span
+                          className="chip"
+                          key={`${match.id}-${laneEntry.heatNumber}-${laneEntry.laneNumber}`}
+                        >
+                          H{laneEntry.heatNumber} L{laneEntry.laneNumber} {laneEntry.label}{" "}
+                          {laneEntry.elapsedDisplay}
+                          {laneEntry.estimatedMph ? ` • ${laneEntry.estimatedMph}` : ""}
                         </span>
                       ))}
                     </div>

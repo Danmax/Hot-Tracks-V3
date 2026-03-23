@@ -1,127 +1,210 @@
 # Phase 1 Backlog
 
-## Epic 1: Project Foundation
+## Purpose
+This backlog now reflects the current implementation state in the repo, not the original pre-build planning draft.
 
-### Stories
-- Set up app shell, auth flow, and protected routes
-- Define base roles and route guards
-- Add seed data support for local development
+Status labels:
+- `done`: implemented in the current app
+- `partial`: implemented, but still missing Phase 1 depth or hardening
+- `next`: not implemented and should stay in the active queue
+- `later`: useful, but not on the immediate critical path
 
-### Done When
-- authenticated users can access the app
-- unauthorized users are blocked from protected screens
-- developers can load sample data for an event scenario
+## Current Snapshot
 
-## Epic 2: Racer and Car Management
+### Done
+- Next.js app shell and protected route structure
+- Cookie-backed sign-in flow and middleware protection
+- Global role model: `admin`, `host`, `official`, `participant`
+- Event-scoped access for hosts and officials
+- Event creation and event detail editing
+- Event setup fields: location, track, track length, lane count, status
+- Event assignment management for hosts and officials
+- Event registration creation
+- Registration status updates
+- Registration car swaps and registration removal before bracket generation
+- Single-elimination bracket generation
+- Match result entry with optional lane times and notes
+- Match reopen/correction flow with downstream bracket clearing
+- Basic results page and basic admin audit visibility
+- File-backed mutable state plus SQL reference schema docs
 
-### Stories
-- Create racer profile form and detail page
-- Create car form and detail page
-- Link cars to racers
-- Support edit and archive actions
+### Partial
+- Racer management is read-only list/detail style, not true CRUD
+- Car management is read-only list/detail style, not true CRUD
+- Admin user management is visibility-only, not editable
+- Results are useful, but still centered around a primary event snapshot
+- Dashboard copy and milestone text still lag the actual implementation state
+- Persistence is real enough for local development, but still JSON-backed
 
-### Done When
-- hosts and participants can create racers and cars
-- racer detail pages show assigned cars
-- archived records no longer appear in default active lists
+### Missing
+- Event archive/delete rules
+- Racer create/edit/archive flows
+- Car create/edit/archive flows
+- Real database adapter
+- End-to-end tests
+- Better event standings/final placement logic
 
-## Epic 3: Event Management
+## Epic 1: Foundation And Access
+Status: `done`
 
-### Stories
-- Create event form
-- Edit event metadata and status
-- Support event roster management
-- Support event check-in workflow
+### Delivered
+- app shell, navigation, and protected route group
+- sign-in and sign-out flow
+- middleware-based auth enforcement
+- route and action guards for role and event scope
+- local seed-backed mutable state
 
-### Done When
-- host can create an event with lane count and date
-- registrations can be added and marked checked in
-- event status transitions are enforced correctly
+### Hardening
+- tighten session handling beyond demo cookie behavior
+- add automated auth and permission tests
 
-## Epic 4: Tournament Generation
+## Epic 2: Racer And Car Management
+Status: `partial`
 
-### Stories
-- Generate single-elimination bracket from checked-in entries
-- Handle odd entry counts with byes
-- Store round and match structure
+### Delivered
+- racer list screen
+- car catalog screen
+- owner linkage and event-derived summary data
 
-### Done When
-- bracket generation works for 4, 8, 16, 32, and non-power-of-two entry counts
-- every entry has a valid path through the bracket
-- byes advance correctly
-
-## Epic 5: Race Operations
-
-### Stories
-- Show next ready match
-- Display lane assignments for 2-lane or 4-lane events
-- Enter winner, optional lane times, and notes
-- Support rerun and disqualification markers
-
-### Done When
-- official can complete a match without direct database edits
-- match completion advances the winner automatically
-- corrected outcomes are audit logged
-
-## Epic 6: Results and Reporting
-
-### Stories
-- Render bracket progression
-- Render event standings
-- Show racer and car performance for the event
-
-### Done When
-- bracket page updates after result entry
-- final placements display after tournament completion
-- event results remain viewable after event close
-
-## Epic 7: Admin Controls
-
-### Stories
-- Basic user list and role management
-- Access to audit logs
-- Manual correction flow for locked matches
+### Remaining
+- create racer flow
+- edit racer flow
+- archive racer flow
+- create car flow
+- edit car flow
+- archive car flow
 
 ### Done When
-- admins can assign supported roles
-- admins can review critical event changes
-- match correction does not silently rewrite history
+- hosts can create and edit racers without file edits
+- hosts can create and edit cars without file edits
+- archived racers and cars drop out of default active views
+
+## Epic 3: Event Setup And Staffing
+Status: `done`
+
+### Delivered
+- event creation from `/events`
+- event detail editing from `/events`
+- event detail editing from `/events/[eventId]`
+- setup fields for event name, date, location, track, track length, description, lane count
+- event status updates
+- host and official assignment management from both event list and workspace
+- lane count lock after bracket generation
+
+### Hardening
+- add archive/delete path with strict safeguards
+- add clearer event lifecycle messaging around destructive actions
+
+## Epic 4: Roster And Check-In
+Status: `done`
+
+### Delivered
+- add event registrations
+- update registration readiness/check-in state
+- remove registrations before bracket generation
+- swap registered car before bracket generation
+- seed resequencing after roster removal
+- roster lock after bracket generation
+
+### Hardening
+- consider explicit check-in timestamps in more UI surfaces
+- add better duplicate and validation messaging tests
+
+## Epic 5: Tournament Generation
+Status: `done`
+
+### Delivered
+- single-elimination bracket generation
+- bye handling for non-power-of-two entry counts
+- persisted tournament, match, heat, and lane-result structures
+- automatic advancement after result entry
+
+### Hardening
+- verify larger brackets with seed data beyond the current sample set
+- add automated progression tests for 4, 8, 16, and odd entry counts
+
+## Epic 6: Live Race Operations
+Status: `done`
+
+### Delivered
+- ready match display in workspace
+- result entry with winner, notes, and optional lane times
+- correction flow for completed matches
+- downstream bracket rollback during corrections
+- audit logging for critical operational changes
+
+### Remaining
+- expose clearer rerun and DQ workflows directly in the UI
+- add stronger operator feedback around current/next race flow
+
+## Epic 7: Results And Admin
+Status: `partial`
+
+### Delivered
+- results page with leaderboard and recent matches
+- admin page with user list and audit history
+- role-protected admin route
+
+### Remaining
+- final placement logic should move beyond simple win totals
+- admin user management should support actual edits
+- results should support event selection instead of only the primary event snapshot
+
+## Epic 8: Persistence And Reliability
+Status: `next`
+
+### Stories
+- replace JSON repository with a real database adapter
+- add migration path from current JSON seed/state
+- add test coverage for event operations and bracket logic
+- add safer recovery behavior for concurrent writes
+
+### Done When
+- event mutations persist through a database layer
+- schema and runtime model stay aligned
+- critical Phase 1 flows have automated coverage
+
+## Immediate Priority Order
+1. Add guarded event archive/delete rules
+2. Build true racer CRUD
+3. Build true car CRUD
+4. Replace JSON-backed state with a real database adapter
+5. Improve results to support event-specific standings and placements
+6. Add automated tests for auth, roster rules, bracket generation, and corrections
 
 ## Milestones
 
-### Milestone 1: Scope and foundations
-- finalize PRD
-- finalize role matrix
-- finalize schema draft
-- scaffold auth and route guards
+### Milestone A: Operational MVP
+Status: `done`
+- auth and protected routes
+- event setup
+- staffing
+- roster management
+- bracket generation
+- live result entry
 
-### Milestone 2: Management workflows
+### Milestone B: Phase 1 Completeness
+Status: `partial`
 - racer CRUD
 - car CRUD
-- event CRUD
-- registration and check-in
+- stronger results logic
+- admin edits
 
-### Milestone 3: Competition engine
-- bracket generation
-- match persistence
-- advancement logic
-
-### Milestone 4: Live operations
-- race control page
-- result entry
-- bracket updates
-- standings
-
-### Milestone 5: Hardening
-- seed data
-- permission review
-- audit logging
-- end-to-end validation
+### Milestone C: Persistence Hardening
+Status: `next`
+- real database
+- migration path
+- automated tests
 
 ## QA Checklist
-- create an event with 8 entries and complete it end to end
-- create an event with a non-power-of-two entry count and verify byes
-- verify participant cannot access host tools
-- verify official cannot regenerate bracket
-- verify corrected match leaves an audit trail
-- verify 2-lane and 4-lane flows both render properly
+- create an event with location, track, and track length
+- update event details from both `/events` and `/events/[eventId]`
+- verify lane count cannot change after bracket generation
+- add and remove registrations before bracket generation
+- verify registrations lock after bracket generation
+- generate a bracket with a non-power-of-two entry count and verify byes
+- record winner, lane times, and notes for a match
+- reopen a completed match and verify downstream bracket state clears
+- verify official cannot access host-only management actions
+- verify primary host assignment cannot be removed
+- verify results page still renders after event updates

@@ -1,5 +1,5 @@
 import { readState } from "@/lib/phase1-repository";
-import type { Event, EventRegistration, Match, Phase1State } from "@/lib/types";
+import type { Event, Match, Phase1State } from "@/lib/types";
 
 function formatDate(dateValue: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -22,12 +22,60 @@ function titleCase(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatTrackLengthFeet(value: number | null | undefined) {
+function formatTrackLength(value: number | null | undefined) {
   if (!value) {
     return "TBD";
   }
 
-  return Number.isInteger(value) ? `${value} ft` : `${value.toFixed(1)} ft`;
+  const feet = Math.floor(value / 12);
+  const inches = value % 12;
+
+  if (feet === 0) {
+    return `${inches} in`;
+  }
+
+  if (inches === 0) {
+    return `${feet} ft`;
+  }
+
+  return `${feet} ft ${inches} in`;
+}
+
+function splitTrackLength(value: number | null | undefined) {
+  if (!value) {
+    return {
+      feetValue: "",
+      inchesValue: "",
+    };
+  }
+
+  return {
+    feetValue: String(Math.floor(value / 12)),
+    inchesValue: String(value % 12),
+  };
+}
+
+function estimateScaleMph(trackLengthInches: number | null | undefined, elapsedMs: number | null | undefined) {
+  if (!trackLengthInches || !elapsedMs || elapsedMs <= 0) {
+    return null;
+  }
+
+  const actualFeet = trackLengthInches / 12;
+  const scaleFeet = actualFeet * 64;
+  const miles = scaleFeet / 5280;
+  const hours = elapsedMs / 3_600_000;
+  const mph = miles / hours;
+
+  return `${mph.toFixed(1)} mph`;
+}
+
+function getTrackLengthInchesForMatch(state: Phase1State, match: Match) {
+  const tournament = state.tournaments.find((item) => item.id === match.tournamentId);
+  if (!tournament) {
+    return null;
+  }
+
+  return state.events.find((item) => item.id === tournament.eventId)?.trackLengthInches ?? null;
 }
 
 function getHostName(state: Phase1State, event: Event) {
@@ -77,8 +125,29 @@ function getMatchesForEvent(state: Phase1State, eventId: string) {
     });
 }
 
+function getHeatsForMatch(state: Phase1State, match: Match) {
+  return state.heats
+    .filter((heat) => heat.matchId === match.id)
+    .sort((left, right) => left.heatNumber - right.heatNumber);
+}
+
+function getDisplayHeat(state: Phase1State, match: Match) {
+  const heats = getHeatsForMatch(state, match);
+
+  const latestRecordedHeat = heats.findLast((heat) =>
+    state.laneResults.some(
+      (laneResult) =>
+        laneResult.heatId === heat.id &&
+        (laneResult.elapsedMs !== null || laneResult.resultStatus !== "pending"),
+    ),
+  );
+
+  return latestRecordedHeat ?? heats.at(-1) ?? null;
+}
+
 function matchSummary(state: Phase1State, match: Match) {
-  const heat = state.heats.find((item) => item.matchId === match.id);
+  const heat = getDisplayHeat(state, match);
+  const trackLengthInches = getTrackLengthInchesForMatch(state, match);
   const results = state.laneResults
     .filter((item) => item.heatId === heat?.id)
     .sort((left, right) => left.laneNumber - right.laneNumber);
@@ -86,26 +155,59 @@ function matchSummary(state: Phase1State, match: Match) {
   const detail = results
     .map((item) => {
       const racer = findRacerName(state, item.registrationId);
-      const timing = item.elapsedMs ? `${(item.elapsedMs / 1000).toFixed(3)}s` : titleCase(item.resultStatus);
+      const timing = item.elapsedMs
+        ? `${(item.elapsedMs / 1000).toFixed(3)}s${
+            estimateScaleMph(trackLengthInches, item.elapsedMs)
+              ? ` • ${estimateScaleMph(trackLengthInches, item.elapsedMs)}`
+              : ""
+          }`
+        : titleCase(item.resultStatus);
       return `Lane ${item.laneNumber}: ${racer} (${timing})`;
     })
     .join(" • ");
 
-  return detail || match.notes || "Awaiting lane results";
+  if (!detail) {
+    return match.notes || "Awaiting lane results";
+  }
+
+  const prefix = heat ? `Heat ${heat.heatNumber}: ` : "";
+  if (match.status === "tied") {
+    return `${prefix}${detail} • ${match.notes ?? "Tie recorded"}`;
+  }
+
+  return `${prefix}${detail}`;
 }
 
 function getLaneEntries(state: Phase1State, match: Match) {
-  const heat = state.heats.find((item) => item.matchId === match.id);
+  const trackLengthInches = getTrackLengthInchesForMatch(state, match);
+  const heats = getHeatsForMatch(state, match);
 
-  return state.laneResults
-    .filter((item) => item.heatId === heat?.id)
-    .sort((left, right) => left.laneNumber - right.laneNumber)
-    .map((item) => ({
-      laneNumber: item.laneNumber,
-      label: findRacerName(state, item.registrationId),
-      elapsedDisplay: item.elapsedMs ? `${(item.elapsedMs / 1000).toFixed(3)}s` : "No time",
-      resultStatus: titleCase(item.resultStatus),
-    }));
+  return heats.flatMap((heat) =>
+    state.laneResults
+      .filter((item) => item.heatId === heat.id)
+      .filter((item) => item.elapsedMs !== null || item.resultStatus !== "pending")
+      .sort((left, right) => left.laneNumber - right.laneNumber)
+      .map((item) => ({
+        heatNumber: heat.heatNumber,
+        laneNumber: item.laneNumber,
+        label: findRacerName(state, item.registrationId),
+        elapsedDisplay: item.elapsedMs ? `${(item.elapsedMs / 1000).toFixed(3)}s` : "No time",
+        estimatedMph: estimateScaleMph(trackLengthInches, item.elapsedMs),
+        resultStatus: titleCase(item.resultStatus),
+      })),
+  );
+}
+
+function getMatchWinnerLabel(state: Phase1State, match: Match) {
+  if (match.winnerRegistrationId) {
+    return findRacerName(state, match.winnerRegistrationId);
+  }
+
+  if (match.status === "tied") {
+    return match.notes?.includes("Official review") ? "Tie - review needed" : "Tie - rerun needed";
+  }
+
+  return "TBD";
 }
 
 export function getDashboardData() {
@@ -183,41 +285,149 @@ export function getDashboardData() {
 
 export function getRacerList() {
   const state = readState();
-  return state.racerProfiles.map((racer) => {
-    const ownedCars = state.cars.filter((car) => car.ownerRacerId === racer.id);
+  const rows = state.racerProfiles.map((racer) => {
+    const ownedCars = state.cars
+      .filter((car) => car.ownerRacerId === racer.id)
+      .sort((left, right) => left.nickname.localeCompare(right.nickname));
     const wins = state.matches.filter((match) => {
       const winner = findRegistration(state, match.winnerRegistrationId);
       return winner?.racerId === racer.id;
     }).length;
-    const liveRegistration = state.eventRegistrations.find((registration) => registration.racerId === racer.id);
+    const activeRegistrationCount = state.eventRegistrations.filter(
+      (registration) => registration.racerId === racer.id && registration.readyStatus !== "withdrawn",
+    ).length;
 
     return {
       id: racer.id,
+      firstName: racer.firstName,
+      lastName: racer.lastName,
       displayName: racer.displayName,
       garageName: racer.garageName ?? "Independent",
-      status: liveRegistration?.readyStatus ?? racer.status,
+      garageNameValue: racer.garageName ?? "",
+      status: titleCase(racer.status),
+      statusValue: racer.status,
+      activeRegistrationCount,
+      canArchive: activeRegistrationCount === 0 && racer.status !== "archived",
+      archiveHelpText:
+        activeRegistrationCount === 0
+          ? "This racer can be archived."
+          : "Racers with active event registrations cannot be archived.",
       carCount: ownedCars.length,
+      cars: ownedCars.map((car) => ({
+        id: car.id,
+        nickname: car.nickname,
+        brand: car.brand,
+        model: car.model,
+        className: car.className ?? "Open",
+        category: car.category ?? "Unassigned",
+        status: titleCase(car.status),
+      })),
+      canAddCars: racer.status !== "archived",
       totalWins: wins,
     };
   });
+
+  return {
+    activeRacers: rows.filter((racer) => racer.statusValue !== "archived"),
+    archivedRacers: rows.filter((racer) => racer.statusValue === "archived"),
+  };
 }
 
 export function getCarList() {
   const state = readState();
-  return state.cars.map((car) => ({
-    id: car.id,
-    nickname: car.nickname,
-    brand: car.brand,
-    model: car.model,
-    category: car.category ?? "Unassigned",
-    className: car.className ?? "Open",
-    ownerName: state.racerProfiles.find((racer) => racer.id === car.ownerRacerId)?.displayName ?? "Unknown owner",
-    status: titleCase(car.status),
-  }));
+  const ownerOptions = state.racerProfiles
+    .filter((racer) => racer.status !== "archived")
+    .map((racer) => ({
+      id: racer.id,
+      label: `${racer.displayName} • ${racer.garageName ?? "Independent"}`,
+    }));
+
+  const rows = state.cars.map((car) => {
+    const activeRegistrationCount = state.eventRegistrations.filter(
+      (registration) => registration.carId === car.id && registration.readyStatus !== "withdrawn",
+    ).length;
+
+    return {
+      id: car.id,
+      ownerRacerId: car.ownerRacerId,
+      nickname: car.nickname,
+      brand: car.brand,
+      model: car.model,
+      seriesValue: car.series ?? "",
+      modelYearValue: car.modelYear ? String(car.modelYear) : "",
+      category: car.category ?? "Unassigned",
+      categoryValue: car.category ?? "",
+      className: car.className ?? "Open",
+      classNameValue: car.className ?? "",
+      notesValue: car.notes ?? "",
+      ownerName:
+        state.racerProfiles.find((racer) => racer.id === car.ownerRacerId)?.displayName ?? "Unknown owner",
+      status: titleCase(car.status),
+      statusValue: car.status,
+      activeRegistrationCount,
+      canArchive: activeRegistrationCount === 0 && car.status !== "archived",
+      archiveHelpText:
+        activeRegistrationCount === 0
+          ? "This car can be archived."
+          : "Cars with active event registrations cannot be archived.",
+    };
+  });
+
+  return {
+    activeCars: rows.filter((car) => car.statusValue !== "archived"),
+    archivedCars: rows.filter((car) => car.statusValue === "archived"),
+    ownerOptions,
+  };
+}
+
+export function getTrackList() {
+  const state = readState();
+  const rows = state.tracks.map((track) => {
+    const activeEventCount = state.events.filter(
+      (event) => event.trackId === track.id && event.status !== "completed",
+    ).length;
+
+    return {
+      id: track.id,
+      name: track.name,
+      location: track.locationName ?? "TBD",
+      locationValue: track.locationName ?? "",
+      trackLength: formatTrackLength(track.trackLengthInches),
+      trackLengthFeetValue: splitTrackLength(track.trackLengthInches).feetValue,
+      trackLengthInchesValue: splitTrackLength(track.trackLengthInches).inchesValue,
+      laneCount: track.laneCount,
+      surfaceType: track.surfaceType ?? "Unspecified",
+      surfaceTypeValue: track.surfaceType ?? "",
+      notesValue: track.notes ?? "",
+      status: titleCase(track.status),
+      statusValue: track.status,
+      defaultTimingMode: titleCase(track.defaultTimingMode),
+      defaultTimingModeValue: track.defaultTimingMode,
+      defaultStartMode: titleCase(track.defaultStartMode),
+      defaultStartModeValue: track.defaultStartMode,
+      activeEventCount,
+      canArchive: activeEventCount === 0 && track.status !== "archived",
+      archiveHelpText:
+        activeEventCount === 0
+          ? "This track can be archived."
+          : "Tracks used by active events cannot be archived.",
+    };
+  });
+
+  return {
+    activeTracks: rows.filter((track) => track.statusValue !== "archived"),
+    archivedTracks: rows.filter((track) => track.statusValue === "archived"),
+  };
 }
 
 export function getEventList() {
   const state = readState();
+  const trackOptions = state.tracks
+    .filter((track) => track.status === "active")
+    .map((track) => ({
+      id: track.id,
+      label: `${track.name} • ${formatTrackLength(track.trackLengthInches)} • ${track.laneCount}-lane`,
+    }));
   return state.events.map((event) => {
     const registrations = getRegistrationsForEvent(state, event.id);
     const tournament = state.tournaments.find((item) => item.eventId === event.id);
@@ -225,6 +435,7 @@ export function getEventList() {
     const eventAssignments = state.eventAssignments.filter((assignment) => assignment.eventId === event.id);
     const completedMatches = eventMatches.filter((match) => match.status === "completed").length;
     const rosterLocked = eventMatches.length > 0;
+    const canDelete = state.events.length > 1 && !rosterLocked;
     const assignedKeys = new Set(
       eventAssignments.map((assignment) => `${assignment.userId}:${assignment.assignmentRole}`),
     );
@@ -246,12 +457,23 @@ export function getEventList() {
       eventDateValue: event.eventDate,
       location: event.locationName ?? "TBD",
       locationValue: event.locationName ?? "",
+      trackId: event.trackId ?? "",
       trackName: event.trackName ?? "TBD",
-      trackNameValue: event.trackName ?? "",
-      trackLength: formatTrackLengthFeet(event.trackLengthFeet),
-      trackLengthValue: event.trackLengthFeet ? String(event.trackLengthFeet) : "",
+      trackLength: formatTrackLength(event.trackLengthInches),
       laneCount: event.laneCount,
-      canEditLaneCount: !rosterLocked,
+      timingMode: titleCase(event.timingMode),
+      timingModeValue: event.timingMode,
+      startMode: titleCase(event.startMode),
+      startModeValue: event.startMode,
+      tiePolicy: titleCase(event.tiePolicy),
+      tiePolicyValue: event.tiePolicy,
+      trackOptions,
+      canDelete,
+      deleteHelpText: canDelete
+        ? "This event can be deleted because bracket generation has not started."
+        : state.events.length <= 1
+          ? "At least one event must remain in the system."
+          : "This event cannot be deleted after bracket generation.",
       checkedInCount: registrations.filter((registration) => registration.checkedInAt).length,
       format: tournament ? titleCase(tournament.format) : "Not generated",
       progress:
@@ -285,6 +507,12 @@ export function getEventWorkspace(eventId: string) {
   if (!event) {
     return null;
   }
+  const trackOptions = state.tracks
+    .filter((track) => track.status === "active" || track.id === event.trackId)
+    .map((track) => ({
+      id: track.id,
+      label: `${track.name} • ${formatTrackLength(track.trackLengthInches)} • ${track.laneCount}-lane`,
+    }));
 
   const tournament = state.tournaments.find((item) => item.eventId === eventId) ?? null;
   const eventAssignments = state.eventAssignments.filter((assignment) => assignment.eventId === eventId);
@@ -303,8 +531,17 @@ export function getEventWorkspace(eventId: string) {
   );
   const registrationOptions = state.racerProfiles
     .map((racer) => {
+      if (racer.status !== "active") {
+        return null;
+      }
+
       const racerCars = state.cars
-        .filter((car) => car.ownerRacerId === racer.id && !registrationsByCar.has(car.id))
+        .filter(
+          (car) =>
+            car.ownerRacerId === racer.id &&
+            car.status !== "archived" &&
+            !registrationsByCar.has(car.id),
+        )
         .map((car) => ({
           id: car.id,
           label: `${car.nickname} • ${car.brand} ${car.model}`,
@@ -316,7 +553,9 @@ export function getEventWorkspace(eventId: string) {
         cars: racerCars,
       };
     })
-    .filter((racer) => racer.cars.length > 0);
+    .filter((racer): racer is { id: string; label: string; cars: Array<{ id: string; label: string }> } =>
+      Boolean(racer && racer.cars.length > 0),
+    );
   const registrations = getRegistrationsForEvent(state, event.id)
     .map((registration) => {
       const racer = state.racerProfiles.find((item) => item.id === registration.racerId);
@@ -325,6 +564,7 @@ export function getEventWorkspace(eventId: string) {
         .filter(
           (item) =>
             item.ownerRacerId === registration.racerId &&
+            item.status !== "archived" &&
             (!registrationsByCar.has(item.id) || item.id === registration.carId),
         )
         .map((item) => ({
@@ -367,12 +607,17 @@ export function getEventWorkspace(eventId: string) {
     statusValue: event.status,
     location: event.locationName ?? "TBD",
     locationValue: event.locationName ?? "",
+    trackId: event.trackId ?? "",
     trackName: event.trackName ?? "TBD",
-    trackNameValue: event.trackName ?? "",
-    trackLength: formatTrackLengthFeet(event.trackLengthFeet),
-    trackLengthValue: event.trackLengthFeet ? String(event.trackLengthFeet) : "",
+    trackLength: formatTrackLength(event.trackLengthInches),
     hostName: getHostName(state, event),
     laneCount: event.laneCount,
+    timingMode: titleCase(event.timingMode),
+    timingModeValue: event.timingMode,
+    startMode: titleCase(event.startMode),
+    startModeValue: event.startMode,
+    tiePolicy: titleCase(event.tiePolicy),
+    tiePolicyValue: event.tiePolicy,
     status: titleCase(event.status),
     description: event.description ?? "No description",
     descriptionValue: event.description ?? "",
@@ -382,7 +627,6 @@ export function getEventWorkspace(eventId: string) {
       canGenerateBracket: matches.length === 0,
       canAddRegistrations: matches.length === 0,
       rosterLocked,
-      canEditLaneCount: !rosterLocked,
       readyMatchCount: readyMatches.length,
     },
     assignments: eventAssignments.map((assignment) => {
@@ -401,6 +645,7 @@ export function getEventWorkspace(eventId: string) {
       hosts: hostAssignmentOptions,
       officials: officialAssignmentOptions,
     },
+    trackOptions,
     registrationOptions,
     matchRows: matches.map((match) => ({
       id: match.id,
@@ -412,14 +657,18 @@ export function getEventWorkspace(eventId: string) {
       slotBLabel: findRacerName(state, match.slotBRegistrationId),
       slotB: `${findRacerName(state, match.slotBRegistrationId)} • ${findCarName(state, match.slotBRegistrationId)}`,
       status: titleCase(match.status),
-      winner: findRacerName(state, match.winnerRegistrationId),
+      winner: getMatchWinnerLabel(state, match),
       summary: matchSummary(state, match),
       laneEntries: getLaneEntries(state, match),
+      tieGuidance:
+        event.tiePolicy === "official_review"
+          ? "Tie policy is official review. Record the tie, then resolve it with a ruling."
+          : "Tie policy is rerun. Recording a tie opens the next heat automatically.",
       canRecordResult:
         !match.winnerRegistrationId &&
         Boolean(match.slotARegistrationId) &&
         Boolean(match.slotBRegistrationId),
-      canCorrectResult: Boolean(match.winnerRegistrationId),
+      canCorrectResult: Boolean(match.winnerRegistrationId) || match.status === "tied",
       winnerOptions: [
         {
           id: match.slotARegistrationId,
@@ -434,43 +683,175 @@ export function getEventWorkspace(eventId: string) {
   };
 }
 
-export function getResultsSnapshot() {
+export function getResultsSnapshot(selectedEventId?: string) {
   const state = readState();
-  const primaryEvent = state.events[0];
-  const leaderboard = getMatchesForEvent(state, primaryEvent.id)
-    .filter((match) => match.winnerRegistrationId)
-    .reduce<Record<string, { wins: number; registration: EventRegistration }>>((accumulator, match) => {
-      const winner = findRegistration(state, match.winnerRegistrationId);
-      if (!winner) {
-        return accumulator;
+  const eventOptions = state.events.map((event) => ({
+    id: event.id,
+    name: event.name,
+  }));
+  const selectedEvent =
+    state.events.find((event) => event.id === selectedEventId) ?? state.events[0] ?? null;
+
+  if (!selectedEvent) {
+    return {
+      eventOptions,
+      selectedEventId: null,
+      eventName: "No events available",
+      eventDate: null,
+      eventLocation: "TBD",
+      trackName: "TBD",
+      trackLength: "TBD",
+      laneCountLabel: "TBD",
+      statusLabel: "Draft",
+      registeredCount: 0,
+      completedMatchCount: 0,
+      totalMatchCount: 0,
+      leaderboardRows: [],
+      latestMatches: [],
+    };
+  }
+
+  const registrations = getRegistrationsForEvent(state, selectedEvent.id);
+  const registrationStats = new Map(
+    registrations.map((registration) => [
+      registration.id,
+      {
+        registration,
+        wins: 0,
+        losses: 0,
+        bestElapsedMs: null as number | null,
+      },
+    ]),
+  );
+  const matches = getMatchesForEvent(state, selectedEvent.id);
+  const matchIds = new Set(matches.map((match) => match.id));
+  const heatIds = new Set(
+    state.heats.filter((heat) => matchIds.has(heat.matchId)).map((heat) => heat.id),
+  );
+
+  for (const laneResult of state.laneResults.filter((item) => heatIds.has(item.heatId))) {
+    if (!laneResult.registrationId || !laneResult.elapsedMs) {
+      continue;
+    }
+
+    const existing = registrationStats.get(laneResult.registrationId);
+    if (!existing) {
+      continue;
+    }
+
+    if (existing.bestElapsedMs === null || laneResult.elapsedMs < existing.bestElapsedMs) {
+      existing.bestElapsedMs = laneResult.elapsedMs;
+    }
+  }
+
+  for (const match of matches.filter((item) => item.status === "completed")) {
+    const participants = [match.slotARegistrationId, match.slotBRegistrationId].filter(
+      (item): item is string => Boolean(item),
+    );
+
+    for (const participantId of participants) {
+      if (!registrationStats.has(participantId)) {
+        const registration = findRegistration(state, participantId);
+        if (registration) {
+          registrationStats.set(participantId, {
+            registration,
+            wins: 0,
+            losses: 0,
+            bestElapsedMs: null,
+          });
+        }
+      }
+    }
+
+    if (!match.winnerRegistrationId) {
+      continue;
+    }
+
+    const winner = registrationStats.get(match.winnerRegistrationId);
+    if (winner) {
+      winner.wins += 1;
+    }
+
+    for (const participantId of participants) {
+      if (participantId === match.winnerRegistrationId) {
+        continue;
       }
 
-      const existing = accumulator[winner.id];
-      accumulator[winner.id] = {
-        registration: winner,
-        wins: existing ? existing.wins + 1 : 1,
-      };
-      return accumulator;
-    }, {});
+      const loser = registrationStats.get(participantId);
+      if (loser) {
+        loser.losses += 1;
+      }
+    }
+  }
 
-  const leaderboardRows = Object.values(leaderboard)
-    .sort((left, right) => right.wins - left.wins)
+  const leaderboardRows = Array.from(registrationStats.values())
+    .sort((left, right) => {
+      if (right.wins !== left.wins) {
+        return right.wins - left.wins;
+      }
+
+      if (left.losses !== right.losses) {
+        return left.losses - right.losses;
+      }
+
+      if (left.bestElapsedMs !== null && right.bestElapsedMs !== null) {
+        return left.bestElapsedMs - right.bestElapsedMs;
+      }
+
+      if (left.bestElapsedMs !== null) {
+        return -1;
+      }
+
+      if (right.bestElapsedMs !== null) {
+        return 1;
+      }
+
+      return findRacerName(state, left.registration.id).localeCompare(
+        findRacerName(state, right.registration.id),
+      );
+    })
     .map((entry, index) => ({
       position: index + 1,
       racer: findRacerName(state, entry.registration.id),
       car: findCarName(state, entry.registration.id),
-      record: `${entry.wins}-${Math.max(0, 2 - entry.wins)}`,
+      record: `${entry.wins}-${entry.losses}`,
+      wins: entry.wins,
+      losses: entry.losses,
+      bestTime:
+        entry.bestElapsedMs !== null ? `${(entry.bestElapsedMs / 1000).toFixed(3)}s` : "No time",
     }));
 
-  const latestMatches = getMatchesForEvent(state, primaryEvent.id).map((match) => ({
-    id: match.id,
-    title: `Round ${match.roundNumber} Match ${match.bracketPosition}`,
-    summary: matchSummary(state, match),
-    result: match.winnerRegistrationId ? `${findRacerName(state, match.winnerRegistrationId)} won` : titleCase(match.status),
-  }));
+  const latestMatches = matches
+    .slice()
+    .sort((left, right) => {
+      if (left.roundNumber === right.roundNumber) {
+        return right.bracketPosition - left.bracketPosition;
+      }
+
+      return right.roundNumber - left.roundNumber;
+    })
+    .map((match) => ({
+      id: match.id,
+      title: `Round ${match.roundNumber} Match ${match.bracketPosition}`,
+      summary: matchSummary(state, match),
+      result: match.winnerRegistrationId
+        ? `${findRacerName(state, match.winnerRegistrationId)} won`
+        : titleCase(match.status),
+    }));
 
   return {
-    eventName: primaryEvent.name,
+    eventOptions,
+    selectedEventId: selectedEvent.id,
+    eventName: selectedEvent.name,
+    eventDate: formatDate(selectedEvent.eventDate),
+    eventLocation: selectedEvent.locationName ?? "TBD",
+    trackName: selectedEvent.trackName ?? "TBD",
+    trackLength: formatTrackLength(selectedEvent.trackLengthInches),
+    laneCountLabel: `${selectedEvent.laneCount} lanes`,
+    statusLabel: titleCase(selectedEvent.status),
+    registeredCount: registrations.length,
+    completedMatchCount: matches.filter((match) => match.status === "completed").length,
+    totalMatchCount: matches.length,
     leaderboardRows,
     latestMatches,
   };

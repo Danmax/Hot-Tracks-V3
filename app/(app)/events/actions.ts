@@ -8,20 +8,23 @@ import {
   createEventRegistration,
   createEventAssignment,
   createEvent,
+  deleteEvent,
   generateBracketForEvent,
   removeEventRegistration,
   removeEventAssignment,
   reopenMatchForCorrection,
   recordMatchResult,
+  recordMatchTie,
   updateEventDetails,
   updateEventStatus,
   updateEventRegistrationCar,
   updateRegistrationStatus,
 } from "@/lib/phase1-operations";
-import type { EventStatus, RegistrationStatus } from "@/lib/types";
+import type { EventStatus, RegistrationStatus, StartMode, TiePolicy, TimingMode } from "@/lib/types";
 
 function revalidateEventViews(eventId?: string) {
   revalidatePath("/");
+  revalidatePath("/admin");
   revalidatePath("/events");
   revalidatePath("/results");
   if (eventId) {
@@ -34,40 +37,36 @@ export async function createEventAction(formData: FormData) {
   const name = formData.get("name");
   const eventDate = formData.get("eventDate");
   const locationName = formData.get("locationName");
-  const trackName = formData.get("trackName");
-  const trackLengthFeet = formData.get("trackLengthFeet");
+  const trackId = formData.get("trackId");
   const description = formData.get("description");
-  const laneCount = formData.get("laneCount");
+  const timingMode = formData.get("timingMode");
+  const startMode = formData.get("startMode");
+  const tiePolicy = formData.get("tiePolicy");
   const status = formData.get("status");
 
   if (
     typeof name !== "string" ||
     typeof eventDate !== "string" ||
-    typeof laneCount !== "string" ||
+    typeof trackId !== "string" ||
+    typeof timingMode !== "string" ||
+    typeof startMode !== "string" ||
+    typeof tiePolicy !== "string" ||
     typeof status !== "string"
   ) {
-    throw new Error("Event name, date, lane count, and status are required");
+    throw new Error("Event name, date, track, race settings, and status are required");
   }
 
   try {
-    const parsedTrackLength =
-      typeof trackLengthFeet === "string" && trackLengthFeet.trim() !== ""
-        ? Number(trackLengthFeet)
-        : null;
-
-    if (parsedTrackLength !== null && (!Number.isFinite(parsedTrackLength) || parsedTrackLength <= 0)) {
-      throw new Error("Track length must be a positive number");
-    }
-
     createEvent(
       {
         name: name.trim(),
         eventDate,
         locationName: typeof locationName === "string" ? locationName.trim() : "",
-        trackName: typeof trackName === "string" ? trackName.trim() : "",
-        trackLengthFeet: parsedTrackLength,
+        trackId,
         description: typeof description === "string" ? description.trim() : "",
-        laneCount: Number(laneCount) === 4 ? 4 : 2,
+        timingMode: timingMode as TimingMode,
+        startMode: startMode as StartMode,
+        tiePolicy: tiePolicy as TiePolicy,
         status: status as EventStatus,
       },
       user.id,
@@ -108,19 +107,23 @@ export async function updateEventDetailsAction(formData: FormData) {
   const name = formData.get("name");
   const eventDate = formData.get("eventDate");
   const locationName = formData.get("locationName");
-  const trackName = formData.get("trackName");
-  const trackLengthFeet = formData.get("trackLengthFeet");
+  const trackId = formData.get("trackId");
   const description = formData.get("description");
-  const laneCount = formData.get("laneCount");
+  const timingMode = formData.get("timingMode");
+  const startMode = formData.get("startMode");
+  const tiePolicy = formData.get("tiePolicy");
   const returnTo = formData.get("returnTo");
 
   if (
     typeof eventId !== "string" ||
     typeof name !== "string" ||
     typeof eventDate !== "string" ||
-    typeof laneCount !== "string"
+    typeof trackId !== "string" ||
+    typeof timingMode !== "string" ||
+    typeof startMode !== "string" ||
+    typeof tiePolicy !== "string"
   ) {
-    throw new Error("Event id, name, date, and lane count are required");
+    throw new Error("Event id, name, date, track, and race settings are required");
   }
 
   const user = await requireEventAccess(eventId, "manage");
@@ -128,25 +131,17 @@ export async function updateEventDetailsAction(formData: FormData) {
     typeof returnTo === "string" && returnTo.startsWith("/") ? returnTo : `/events/${eventId}`;
 
   try {
-    const parsedTrackLength =
-      typeof trackLengthFeet === "string" && trackLengthFeet.trim() !== ""
-        ? Number(trackLengthFeet)
-        : null;
-
-    if (parsedTrackLength !== null && (!Number.isFinite(parsedTrackLength) || parsedTrackLength <= 0)) {
-      throw new Error("Track length must be a positive number");
-    }
-
     updateEventDetails(
       eventId,
       {
         name,
         eventDate,
         locationName: typeof locationName === "string" ? locationName : "",
-        trackName: typeof trackName === "string" ? trackName : "",
-        trackLengthFeet: parsedTrackLength,
+        trackId,
         description: typeof description === "string" ? description : "",
-        laneCount: Number(laneCount) === 4 ? 4 : 2,
+        timingMode: timingMode as TimingMode,
+        startMode: startMode as StartMode,
+        tiePolicy: tiePolicy as TiePolicy,
       },
       user.id,
     );
@@ -173,6 +168,27 @@ export async function generateBracketAction(formData: FormData) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate bracket";
     redirect(buildFlashPath(`/events/${eventId}`, "error", message));
+  }
+}
+
+export async function deleteEventAction(formData: FormData) {
+  const eventId = formData.get("eventId");
+  const returnTo = formData.get("returnTo");
+
+  if (typeof eventId !== "string") {
+    throw new Error("Event id is required");
+  }
+
+  const user = await requireEventAccess(eventId, "manage");
+  const redirectPath = typeof returnTo === "string" && returnTo.startsWith("/") ? returnTo : "/events";
+
+  try {
+    deleteEvent(eventId, user.id);
+    revalidateEventViews();
+    redirect(buildFlashPath(redirectPath, "success", "Event deleted"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete event";
+    redirect(buildFlashPath(redirectPath, "error", message));
   }
 }
 
@@ -270,17 +286,14 @@ export async function removeEventRegistrationAction(formData: FormData) {
 export async function recordMatchResultAction(formData: FormData) {
   const eventId = formData.get("eventId");
   const matchId = formData.get("matchId");
+  const outcome = formData.get("outcome");
   const winnerRegistrationId = formData.get("winnerRegistrationId");
   const note = formData.get("note");
   const slotASeconds = formData.get("slotASeconds");
   const slotBSeconds = formData.get("slotBSeconds");
 
-  if (
-    typeof eventId !== "string" ||
-    typeof matchId !== "string" ||
-    typeof winnerRegistrationId !== "string"
-  ) {
-    throw new Error("Event, match, and winner are required");
+  if (typeof eventId !== "string" || typeof matchId !== "string") {
+    throw new Error("Event and match are required");
   }
 
   const user = await requireEventAccess(eventId, "operate");
@@ -298,19 +311,30 @@ export async function recordMatchResultAction(formData: FormData) {
   };
 
   try {
-    recordMatchResult(
-      eventId,
-      matchId,
-      winnerRegistrationId,
-      user.id,
-      typeof note === "string" ? note : "",
-      {
-        slotA: parseSeconds(slotASeconds),
-        slotB: parseSeconds(slotBSeconds),
-      },
-    );
+    const laneTimes = {
+      slotA: parseSeconds(slotASeconds),
+      slotB: parseSeconds(slotBSeconds),
+    };
+    const noteValue = typeof note === "string" ? note : "";
+
+    if (outcome === "tie") {
+      recordMatchTie(eventId, matchId, user.id, noteValue, laneTimes);
+    } else {
+      if (typeof winnerRegistrationId !== "string") {
+        throw new Error("Winner is required when recording a match result");
+      }
+
+      recordMatchResult(eventId, matchId, winnerRegistrationId, user.id, noteValue, laneTimes);
+    }
+
     revalidateEventViews(eventId);
-    redirect(buildFlashPath(`/events/${eventId}`, "success", "Match result recorded"));
+    redirect(
+      buildFlashPath(
+        `/events/${eventId}`,
+        "success",
+        outcome === "tie" ? "Tie recorded. Match remains open for rerun." : "Match result recorded",
+      ),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to record match result";
     redirect(buildFlashPath(`/events/${eventId}`, "error", message));

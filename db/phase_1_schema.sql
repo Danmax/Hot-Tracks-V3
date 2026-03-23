@@ -33,6 +33,20 @@ CREATE TABLE cars (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE tracks (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  location_name TEXT,
+  track_length_inches INTEGER,
+  lane_count INTEGER NOT NULL CHECK (lane_count IN (2, 4)),
+  surface_type TEXT,
+  notes TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  default_timing_mode TEXT NOT NULL CHECK (default_timing_mode IN ('manual_entry', 'track_timer')),
+  default_start_mode TEXT NOT NULL CHECK (default_start_mode IN ('manual_gate', 'electronic_gate')),
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE events (
   id TEXT PRIMARY KEY,
   host_user_id TEXT NOT NULL REFERENCES users(id),
@@ -40,9 +54,13 @@ CREATE TABLE events (
   description TEXT,
   event_date TEXT NOT NULL,
   location_name TEXT,
+  track_id TEXT REFERENCES tracks(id),
   track_name TEXT,
-  track_length_feet REAL,
+  track_length_inches INTEGER,
   lane_count INTEGER NOT NULL CHECK (lane_count IN (2, 4)),
+  timing_mode TEXT NOT NULL CHECK (timing_mode IN ('manual_entry', 'track_timer')),
+  start_mode TEXT NOT NULL CHECK (start_mode IN ('manual_gate', 'electronic_gate')),
+  tie_policy TEXT NOT NULL CHECK (tie_policy IN ('rerun', 'official_review')),
   status TEXT NOT NULL CHECK (status IN ('draft', 'registration_open', 'checkin', 'in_progress', 'completed')),
   created_at TEXT NOT NULL
 );
@@ -80,7 +98,7 @@ CREATE TABLE matches (
   tournament_id TEXT NOT NULL REFERENCES tournaments(id),
   round_number INTEGER NOT NULL,
   bracket_position INTEGER NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'in_progress', 'completed', 'corrected')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'in_progress', 'completed', 'corrected', 'tied')),
   slot_a_registration_id TEXT REFERENCES event_registrations(id),
   slot_b_registration_id TEXT REFERENCES event_registrations(id),
   winner_registration_id TEXT REFERENCES event_registrations(id),
@@ -117,6 +135,7 @@ CREATE TABLE audit_logs (
 );
 
 CREATE INDEX idx_event_registrations_event_id ON event_registrations(event_id);
+CREATE INDEX idx_tracks_status ON tracks(status);
 CREATE INDEX idx_event_assignments_event_id ON event_assignments(event_id);
 CREATE INDEX idx_matches_tournament_id ON matches(tournament_id);
 CREATE INDEX idx_heats_match_id ON heats(match_id);

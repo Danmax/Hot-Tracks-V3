@@ -141,6 +141,34 @@
       "createdAt": "2026-03-21T08:12:00Z"
     }
   ],
+  "tracks": [
+    {
+      "id": "trk_orange_overpass",
+      "name": "Orange Overpass",
+      "locationName": "Brooklyn Track Loft",
+      "trackLengthInches": 194,
+      "laneCount": 4,
+      "surfaceType": "Hot Wheels orange",
+      "notes": "Primary club raceway with timer bridge.",
+      "status": "active",
+      "defaultTimingMode": "track_timer",
+      "defaultStartMode": "electronic_gate",
+      "createdAt": "2026-03-21T07:30:00Z"
+    },
+    {
+      "id": "trk_basement_dash",
+      "name": "Basement Dash",
+      "locationName": "Queens Home Circuit",
+      "trackLengthInches": 288,
+      "laneCount": 2,
+      "surfaceType": "Hybrid plastic and wood risers",
+      "notes": "Compact home setup for fast two-lane events.",
+      "status": "active",
+      "defaultTimingMode": "manual_entry",
+      "defaultStartMode": "manual_gate",
+      "createdAt": "2026-03-21T07:45:00Z"
+    }
+  ],
   "events": [
     {
       "id": "e_garage_clash",
@@ -149,9 +177,13 @@
       "description": "Primary live tournament used for Phase 1 validation.",
       "eventDate": "2026-03-29",
       "locationName": "Brooklyn Track Loft",
+      "trackId": "trk_orange_overpass",
       "trackName": "Orange Overpass",
-      "trackLengthFeet": 32,
+      "trackLengthInches": 194,
       "laneCount": 4,
+      "timingMode": "track_timer",
+      "startMode": "electronic_gate",
+      "tiePolicy": "rerun",
       "status": "in_progress",
       "createdAt": "2026-03-21T12:00:00Z"
     },
@@ -162,9 +194,13 @@
       "description": "Smaller follow-up event for 2-lane testing.",
       "eventDate": "2026-04-05",
       "locationName": "Queens Home Circuit",
+      "trackId": "trk_basement_dash",
       "trackName": "Basement Dash",
-      "trackLengthFeet": 24,
+      "trackLengthInches": 288,
       "laneCount": 2,
+      "timingMode": "manual_entry",
+      "startMode": "manual_gate",
+      "tiePolicy": "rerun",
       "status": "in_progress",
       "createdAt": "2026-03-21T12:15:00Z"
     }
