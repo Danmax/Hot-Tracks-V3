@@ -13,6 +13,7 @@ import {
   reopenMatchAction,
   recordMatchResultAction,
   updateEventDetailsAction,
+  updateRegistrationSeedAction,
   updateEventStatusAction,
   updateEventRegistrationCarAction,
   updateRegistrationStatusAction,
@@ -57,6 +58,9 @@ export default async function EventWorkspacePage({
           </p>
           <p className="hero-copy">
             {event.timingMode} • {event.startMode} • Tie policy: {event.tiePolicy}
+          </p>
+          <p className="hero-copy">
+            {event.seedingMode} • {event.matchSeriesLabel}
           </p>
           <p className="hero-copy">{event.description}</p>
         </div>
@@ -138,6 +142,30 @@ export default async function EventWorkspacePage({
                 <option value="official_review">Official Review</option>
               </select>
             </label>
+            <label className="form-field">
+              <span>Seeding mode</span>
+              <select
+                defaultValue={event.seedingModeValue}
+                disabled={event.operations.rosterLocked}
+                name="seedingMode"
+              >
+                <option value="standard_seeded">Standard Seeded</option>
+                <option value="random_draw">Random Draw</option>
+                <option value="qualifier_split">Qualifier Split</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Match series</span>
+              <select
+                defaultValue={event.matchRaceCountValue}
+                disabled={event.operations.rosterLocked}
+                name="matchRaceCount"
+              >
+                <option value="1">Single race</option>
+                <option value="2">Best of 2</option>
+                <option value="3">Best of 3</option>
+              </select>
+            </label>
             <label className="form-field form-field-span-full">
               <span>Description</span>
               <textarea
@@ -152,6 +180,12 @@ export default async function EventWorkspacePage({
               <p className="list-meta">
                 Track selection drives lane count and track length. If bracket structure is already locked,
                 switch only to tracks with the same lane count as the current event.
+              </p>
+              <p className="list-meta">
+                `Qualifier Split` uses ranking seeds like `1 vs 5, 2 vs 6`; `Random Draw` ignores seed order.
+              </p>
+              <p className="list-meta">
+                Seeding mode and match series lock as soon as the bracket is generated.
               </p>
             </div>
             <FormSubmitButton
@@ -204,22 +238,12 @@ export default async function EventWorkspacePage({
                         {match.roundLabel}: {match.slotA} vs {match.slotB}
                       </p>
                       <p className="list-meta">
-                        Manual official entry is the source of truth in Phase 1. {match.tieGuidance}
+                        Manual official entry is the source of truth in Phase 1. Lowest valid time wins. {match.tieGuidance}
+                      </p>
+                      <p className="list-meta">
+                        {match.matchSeriesLabel} • Current score {match.seriesScore}
                       </p>
                     </div>
-                    <label className="form-field">
-                      <span>Winner</span>
-                      <select defaultValue="" name="winnerRegistrationId">
-                        <option disabled value="">
-                          Select winner
-                        </option>
-                        {match.winnerOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
                     <label className="form-field">
                       <span>Notes</span>
                       <textarea name="note" placeholder="Optional ruling, rerun note, or finish detail" rows={3} />
@@ -234,9 +258,27 @@ export default async function EventWorkspacePage({
                         <input inputMode="decimal" name="slotBSeconds" placeholder="3.025" type="text" />
                       </label>
                     </div>
+                    <div className="timing-grid">
+                      <label className="form-field compact-field">
+                        <span>{match.slotALabel} result</span>
+                        <select defaultValue="finished" name="slotAStatus">
+                          <option value="finished">Finished</option>
+                          <option value="dnf">DNF</option>
+                          <option value="dq">DQ</option>
+                        </select>
+                      </label>
+                      <label className="form-field compact-field">
+                        <span>{match.slotBLabel} result</span>
+                        <select defaultValue="finished" name="slotBStatus">
+                          <option value="finished">Finished</option>
+                          <option value="dnf">DNF</option>
+                          <option value="dq">DQ</option>
+                        </select>
+                      </label>
+                    </div>
                     <FormSubmitButton
                       className="button primary compact-button"
-                      idleLabel="Record Winner"
+                      idleLabel="Record Timed Result"
                       pendingLabel="Recording..."
                       submitName="outcome"
                       submitValue="winner"
@@ -475,6 +517,21 @@ export default async function EventWorkspacePage({
                   <strong>{registration.status}</strong>
                 </div>
                 <div className="registration-actions">
+                  {registration.canEdit ? (
+                    <form action={updateRegistrationSeedAction} className="registration-form">
+                      <input name="eventId" type="hidden" value={event.id} />
+                      <input name="registrationId" type="hidden" value={registration.id} />
+                      <label className="form-field compact-field">
+                        <span>Qualifier seed</span>
+                        <input defaultValue={String(registration.seed)} inputMode="numeric" name="seed" type="text" />
+                      </label>
+                      <FormSubmitButton
+                        className="button secondary compact-button"
+                        idleLabel="Save Seed"
+                        pendingLabel="Saving..."
+                      />
+                    </form>
+                  ) : null}
                   <form action={updateRegistrationStatusAction} className="registration-form">
                     <input name="eventId" type="hidden" value={event.id} />
                     <input name="registrationId" type="hidden" value={registration.id} />
@@ -554,6 +611,7 @@ export default async function EventWorkspacePage({
                         >
                           H{laneEntry.heatNumber} L{laneEntry.laneNumber} {laneEntry.label}{" "}
                           {laneEntry.elapsedDisplay}
+                          {laneEntry.resultStatus !== "Finished" ? ` • ${laneEntry.resultStatus}` : ""}
                           {laneEntry.estimatedMph ? ` • ${laneEntry.estimatedMph}` : ""}
                         </span>
                       ))}

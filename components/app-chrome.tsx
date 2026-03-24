@@ -67,13 +67,21 @@ export function AppChrome({
         </div>
 
         <div className="brand-block">
-          <p className="eyebrow">Phase 1 MVP</p>
+          <p className="eyebrow">Race Control System</p>
           <h1>{collapsed ? "HT" : "Hot Tracks"}</h1>
           {!collapsed ? (
             <p className="brand-copy">
-              Race operations, bracket control, and event visibility for local Hot Wheels tournaments.
+              Mobile-ready garage operations for participant setup, track building, event control, and championship flow.
             </p>
           ) : null}
+        </div>
+
+        <div className="mobile-user-banner">
+          <div>
+            <p className="eyebrow">Signed in</p>
+            <p className="mobile-user-name">{userName}</p>
+          </div>
+          <span className="chip">{userRoleLabel}</span>
         </div>
 
         <Navigation collapsed={collapsed} userRole={userRole} />

@@ -8,40 +8,59 @@ const navItems = [
   {
     href: "/",
     icon: "dashboard",
-    label: "Dashboard",
+    label: "Garage",
+    shortLabel: "Home",
+    detail: "Participant setup, tournaments, and race flow",
     roles: ["admin", "host", "official", "participant"] as UserRole[],
   },
   {
     href: "/racers",
     icon: "racers",
-    label: "Racers",
+    label: "Drivers",
+    shortLabel: "Drivers",
+    detail: "Garage roster, teams, and participant records",
     roles: ["admin", "host", "official", "participant"] as UserRole[],
   },
   {
     href: "/cars",
     icon: "cars",
     label: "Cars",
+    shortLabel: "Cars",
+    detail: "Cars, items, and race-ready inventory",
     roles: ["admin", "host", "official", "participant"] as UserRole[],
   },
   {
     href: "/tracks",
     icon: "tracks",
-    label: "Tracks",
+    label: "Track Builder",
+    shortLabel: "Tracks",
+    detail: "Track builder, lane setup, and race defaults",
     roles: ["admin", "host", "official", "participant"] as UserRole[],
   },
   {
     href: "/events",
     icon: "events",
-    label: "Events",
+    label: "Tournaments",
+    shortLabel: "Events",
+    detail: "Events, championships, matches, and race control",
     roles: ["admin", "host", "official", "participant"] as UserRole[],
   },
   {
     href: "/results",
     icon: "results",
-    label: "Results",
+    label: "Awards",
+    shortLabel: "Results",
+    detail: "Awards, standings, and championship snapshots",
     roles: ["admin", "host", "official", "participant"] as UserRole[],
   },
-  { href: "/admin", icon: "admin", label: "Admin", roles: ["admin"] as UserRole[] },
+  {
+    href: "/admin",
+    icon: "admin",
+    label: "Team Ops",
+    shortLabel: "Admin",
+    detail: "Team management, sponsors, and audit control",
+    roles: ["admin"] as UserRole[],
+  },
 ];
 
 function NavIcon({ kind }: Readonly<{ kind: string }>) {
@@ -130,7 +149,14 @@ export function Navigation({
             <span className="nav-icon">
               <NavIcon kind={item.icon} />
             </span>
-            {!collapsed ? <span className="nav-label">{item.label}</span> : null}
+            {!collapsed ? (
+              <span className="nav-text">
+                <span className="nav-label">{item.label}</span>
+                <span className="nav-detail">{item.detail}</span>
+              </span>
+            ) : (
+              <span className="nav-mobile-label">{item.shortLabel}</span>
+            )}
           </Link>
         );
       })}

@@ -64,6 +64,9 @@ function normalizeState(state: Phase1State): Phase1State {
     event.timingMode = event.timingMode ?? "manual_entry";
     event.startMode = event.startMode ?? "manual_gate";
     event.tiePolicy = event.tiePolicy ?? "rerun";
+    event.seedingMode = event.seedingMode ?? "standard_seeded";
+    event.matchRaceCount =
+      event.matchRaceCount === 2 || event.matchRaceCount === 3 ? event.matchRaceCount : 1;
   }
 
   return {

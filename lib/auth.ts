@@ -1,11 +1,39 @@
 import "server-only";
 
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { readState } from "@/lib/phase1-repository";
 import type { User, UserRole } from "@/lib/types";
 
 export const SESSION_COOKIE = "hot_tracks_session";
+export const DEMO_PASSWORD = "demo123";
+
+export function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+export function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const derivedKey = scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${derivedKey}`;
+}
+
+export function verifyPassword(password: string, passwordHash: string) {
+  if (passwordHash === "demo-hash") {
+    return password === DEMO_PASSWORD;
+  }
+
+  const [algorithm, salt, derivedKey] = passwordHash.split(":");
+  if (algorithm !== "scrypt" || !salt || !derivedKey) {
+    return false;
+  }
+
+  const expected = Buffer.from(derivedKey, "hex");
+  const actual = scryptSync(password, salt, expected.length);
+
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
 
 export async function getSessionUser(): Promise<User | null> {
   const cookieStore = await cookies();

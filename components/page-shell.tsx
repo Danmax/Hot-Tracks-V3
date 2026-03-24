@@ -10,9 +10,14 @@ export function PageShell({
   return (
     <section className="page-shell">
       <header className="page-header">
-        <div>
-          <p className="eyebrow">Phase 1 workspace</p>
+        <div className="page-title-block">
+          <p className="eyebrow">Mobile race workspace</p>
           <h2>{title}</h2>
+          <div className="page-tag-row">
+            <span className="chip">Garage</span>
+            <span className="chip">Race</span>
+            <span className="chip">Championship</span>
+          </div>
         </div>
         <p className="page-description">{description}</p>
       </header>
@@ -20,4 +25,3 @@ export function PageShell({
     </section>
   );
 }
-

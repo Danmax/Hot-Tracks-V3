@@ -39,6 +39,14 @@
       "role": "participant",
       "displayName": "Nina Apex",
       "createdAt": "2026-03-20T09:13:00Z"
+    },
+    {
+      "id": "u_danmax_775661",
+      "email": "danmax@frowear.com",
+      "passwordHash": "scrypt:c09b07ab753e8d6ac51cc8e131b4bb0b:b6ca6760150a9c9dac04ed61bcb813dbe16418030ac43df504764bad87fb2be55d28164173fb6f7a89e37eda88fd7bef0a6bd5104322f9132c385989be6f3365",
+      "role": "participant",
+      "displayName": "Danmax",
+      "createdAt": "2026-03-24T05:06:15.661Z"
     }
   ],
   "racerProfiles": [
@@ -185,7 +193,9 @@
       "startMode": "electronic_gate",
       "tiePolicy": "rerun",
       "status": "in_progress",
-      "createdAt": "2026-03-21T12:00:00Z"
+      "createdAt": "2026-03-21T12:00:00Z",
+      "seedingMode": "standard_seeded",
+      "matchRaceCount": 1
     },
     {
       "id": "e_family_sprint",
@@ -202,7 +212,9 @@
       "startMode": "manual_gate",
       "tiePolicy": "rerun",
       "status": "in_progress",
-      "createdAt": "2026-03-21T12:15:00Z"
+      "createdAt": "2026-03-21T12:15:00Z",
+      "seedingMode": "standard_seeded",
+      "matchRaceCount": 1
     }
   ],
   "eventAssignments": [
@@ -608,6 +620,15 @@
       "action": "registration_status_updated",
       "metadataJson": "{\"readyStatus\":\"ready\",\"eventId\":\"e_family_sprint\"}",
       "createdAt": "2026-03-23T22:00:25.107Z"
+    },
+    {
+      "id": "audit_1774328775700_17",
+      "actorUserId": "u_danmax_775661",
+      "entityType": "user",
+      "entityId": "u_danmax_775661",
+      "action": "user_signed_up",
+      "metadataJson": "{\"email\":\"danmax@frowear.com\",\"role\":\"participant\",\"source\":\"self_signup\"}",
+      "createdAt": "2026-03-24T05:06:15.661Z"
     }
   ]
 }

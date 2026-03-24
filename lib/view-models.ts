@@ -210,6 +210,42 @@ function getMatchWinnerLabel(state: Phase1State, match: Match) {
   return "TBD";
 }
 
+function getEventForMatch(state: Phase1State, match: Match) {
+  const tournament = state.tournaments.find((item) => item.id === match.tournamentId);
+  if (!tournament) {
+    return null;
+  }
+
+  return state.events.find((item) => item.id === tournament.eventId) ?? null;
+}
+
+function getSeriesScoreForMatch(state: Phase1State, match: Match) {
+  const heats = getHeatsForMatch(state, match);
+  let slotAWins = 0;
+  let slotBWins = 0;
+
+  heats.forEach((heat) => {
+    const winnerId = state.laneResults.find(
+      (laneResult) => laneResult.heatId === heat.id && laneResult.finishPosition === 1,
+    )?.registrationId;
+
+    if (winnerId === match.slotARegistrationId) {
+      slotAWins += 1;
+    } else if (winnerId === match.slotBRegistrationId) {
+      slotBWins += 1;
+    }
+  });
+
+  return {
+    slotAWins,
+    slotBWins,
+  };
+}
+
+function getSeriesLabel(matchRaceCount: 1 | 2 | 3) {
+  return matchRaceCount === 1 ? "Single race" : `Best of ${matchRaceCount}`;
+}
+
 export function getDashboardData() {
   const state = readState();
   const primaryEvent = state.events[0];
@@ -467,7 +503,12 @@ export function getEventList() {
       startModeValue: event.startMode,
       tiePolicy: titleCase(event.tiePolicy),
       tiePolicyValue: event.tiePolicy,
+      seedingMode: titleCase(event.seedingMode),
+      seedingModeValue: event.seedingMode,
+      matchSeriesLabel: getSeriesLabel(event.matchRaceCount),
+      matchRaceCountValue: String(event.matchRaceCount),
       trackOptions,
+      rosterLocked,
       canDelete,
       deleteHelpText: canDelete
         ? "This event can be deleted because bracket generation has not started."
@@ -521,6 +562,7 @@ export function getEventWorkspace(eventId: string) {
   const readyMatches = matches.filter(
     (match) =>
       !match.winnerRegistrationId &&
+      match.status !== "tied" &&
       Boolean(match.slotARegistrationId) &&
       Boolean(match.slotBRegistrationId),
   );
@@ -618,6 +660,10 @@ export function getEventWorkspace(eventId: string) {
     startModeValue: event.startMode,
     tiePolicy: titleCase(event.tiePolicy),
     tiePolicyValue: event.tiePolicy,
+    seedingMode: titleCase(event.seedingMode),
+    seedingModeValue: event.seedingMode,
+    matchSeriesLabel: getSeriesLabel(event.matchRaceCount),
+    matchRaceCountValue: String(event.matchRaceCount),
     status: titleCase(event.status),
     description: event.description ?? "No description",
     descriptionValue: event.description ?? "",
@@ -647,39 +693,47 @@ export function getEventWorkspace(eventId: string) {
     },
     trackOptions,
     registrationOptions,
-    matchRows: matches.map((match) => ({
-      id: match.id,
-      roundLabel: `Round ${match.roundNumber}`,
-      slotARegistrationId: match.slotARegistrationId,
-      slotALabel: findRacerName(state, match.slotARegistrationId),
-      slotA: `${findRacerName(state, match.slotARegistrationId)} • ${findCarName(state, match.slotARegistrationId)}`,
-      slotBRegistrationId: match.slotBRegistrationId,
-      slotBLabel: findRacerName(state, match.slotBRegistrationId),
-      slotB: `${findRacerName(state, match.slotBRegistrationId)} • ${findCarName(state, match.slotBRegistrationId)}`,
-      status: titleCase(match.status),
-      winner: getMatchWinnerLabel(state, match),
-      summary: matchSummary(state, match),
-      laneEntries: getLaneEntries(state, match),
-      tieGuidance:
-        event.tiePolicy === "official_review"
-          ? "Tie policy is official review. Record the tie, then resolve it with a ruling."
-          : "Tie policy is rerun. Recording a tie opens the next heat automatically.",
-      canRecordResult:
-        !match.winnerRegistrationId &&
-        Boolean(match.slotARegistrationId) &&
-        Boolean(match.slotBRegistrationId),
-      canCorrectResult: Boolean(match.winnerRegistrationId) || match.status === "tied",
-      winnerOptions: [
-        {
-          id: match.slotARegistrationId,
-          label: findRacerName(state, match.slotARegistrationId),
-        },
-        {
-          id: match.slotBRegistrationId,
-          label: findRacerName(state, match.slotBRegistrationId),
-        },
-      ].filter((option): option is { id: string; label: string } => Boolean(option.id)),
-    })),
+    matchRows: matches.map((match) => {
+      const seriesScore = getSeriesScoreForMatch(state, match);
+      const matchEvent = getEventForMatch(state, match);
+
+      return {
+        id: match.id,
+        roundLabel: `Round ${match.roundNumber}`,
+        slotARegistrationId: match.slotARegistrationId,
+        slotALabel: findRacerName(state, match.slotARegistrationId),
+        slotA: `${findRacerName(state, match.slotARegistrationId)} • ${findCarName(state, match.slotARegistrationId)}`,
+        slotBRegistrationId: match.slotBRegistrationId,
+        slotBLabel: findRacerName(state, match.slotBRegistrationId),
+        slotB: `${findRacerName(state, match.slotBRegistrationId)} • ${findCarName(state, match.slotBRegistrationId)}`,
+        status: titleCase(match.status),
+        winner: getMatchWinnerLabel(state, match),
+        summary: matchSummary(state, match),
+        laneEntries: getLaneEntries(state, match),
+        seriesScore: `${seriesScore.slotAWins}-${seriesScore.slotBWins}`,
+        matchSeriesLabel: getSeriesLabel(matchEvent?.matchRaceCount ?? 1),
+        tieGuidance:
+          event.tiePolicy === "official_review"
+            ? "Tie policy is official review. Record the tie, then resolve it with a ruling."
+            : "Tie policy is rerun. Recording a tie opens the next heat automatically.",
+        canRecordResult:
+          !match.winnerRegistrationId &&
+          match.status !== "tied" &&
+          Boolean(match.slotARegistrationId) &&
+          Boolean(match.slotBRegistrationId),
+        canCorrectResult: Boolean(match.winnerRegistrationId) || match.status === "tied",
+        winnerOptions: [
+          {
+            id: match.slotARegistrationId,
+            label: findRacerName(state, match.slotARegistrationId),
+          },
+          {
+            id: match.slotBRegistrationId,
+            label: findRacerName(state, match.slotBRegistrationId),
+          },
+        ].filter((option): option is { id: string; label: string } => Boolean(option.id)),
+      };
+    }),
   };
 }
 

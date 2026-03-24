@@ -83,6 +83,7 @@ p {
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
 .app-frame.sidebar-collapsed .sidebar {
@@ -226,8 +227,22 @@ p {
   height: 20px;
 }
 
+.nav-text {
+  display: grid;
+  gap: 2px;
+}
+
 .nav-label {
   font-weight: 700;
+}
+
+.nav-detail {
+  font-size: 0.76rem;
+  color: rgba(247, 239, 229, 0.58);
+}
+
+.nav-mobile-label {
+  display: none;
 }
 
 .main-panel {
@@ -245,6 +260,13 @@ p {
   align-items: flex-end;
   justify-content: space-between;
   gap: 20px;
+  padding: 24px 26px;
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 246, 232, 0.72)),
+    linear-gradient(180deg, rgba(255, 159, 28, 0.06), transparent 70%);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
 }
 
 .page-header h2 {
@@ -252,6 +274,17 @@ p {
   font-size: clamp(2.2rem, 5vw, 3rem);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.page-title-block {
+  display: grid;
+  gap: 12px;
+}
+
+.page-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .page-description {
@@ -459,6 +492,48 @@ p {
   border: 1px solid var(--line);
 }
 
+.car-photo-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.car-photo-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.car-photo-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  align-items: start;
+}
+
+.car-photo-preview {
+  min-height: 180px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed rgba(55, 39, 28, 0.18);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.car-photo-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.car-photo-preview.placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  padding: 16px;
+  text-align: center;
+}
+
 .flash-banner {
   padding: 14px 16px;
   border-radius: var(--radius-sm);
@@ -570,6 +645,9 @@ p {
 .mini-card,
 .list-card {
   border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
 }
 
 .stat-card {
@@ -697,10 +775,45 @@ p {
   padding: 20px;
 }
 
+.atlas-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 170px;
+}
+
+.atlas-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-hero {
+  background:
+    radial-gradient(circle at top right, rgba(255, 159, 28, 0.2), transparent 35%),
+    linear-gradient(145deg, rgba(32, 26, 23, 0.94), rgba(53, 35, 24, 0.92));
+  color: #fff6ea;
+}
+
+.dashboard-hero .hero-copy,
+.dashboard-hero .eyebrow {
+  color: rgba(255, 246, 234, 0.86);
+}
+
 .status-block {
   display: grid;
   justify-items: end;
   gap: 8px;
+}
+
+.mobile-user-banner {
+  display: none;
+}
+
+.mobile-user-name {
+  font-weight: 700;
+  color: #fff6ea;
 }
 
 .user-panel {
@@ -777,6 +890,34 @@ p {
   gap: 18px;
 }
 
+.auth-workbench {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.auth-form-card,
+.auth-demo-section {
+  align-self: start;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-demo-section {
+  display: grid;
+  gap: 18px;
+}
+
+.auth-demo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .user-option {
   display: grid;
   gap: 18px;
@@ -804,13 +945,17 @@ p {
   }
 
   .sidebar {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 20;
     height: auto;
     overflow: visible;
+    padding: 14px 16px 16px;
+    gap: 14px;
   }
 
   .main-panel {
-    padding-top: 0;
+    padding: 18px 16px 28px;
   }
 
   .card-grid,
@@ -823,20 +968,78 @@ p {
   .assignment-grid,
   .registration-management-grid,
   .event-create-form,
-  .signin-grid {
+  .signin-grid,
+  .auth-workbench,
+  .car-photo-grid {
     grid-template-columns: 1fr;
   }
 
   .page-header,
   .hero-card,
   .auth-option-footer,
+  .auth-demo-header,
+  .car-photo-header,
   .control-panel {
     align-items: start;
     flex-direction: column;
   }
 
   .sidebar-header {
-    margin-bottom: 12px;
+    margin-bottom: 0;
+  }
+
+  .brand-block {
+    padding: 0;
+  }
+
+  .brand-block h1 {
+    font-size: 1.9rem;
+  }
+
+  .brand-copy {
+    display: none;
+  }
+
+  .mobile-user-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 215, 120, 0.14);
+  }
+
+  .nav-list {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(160px, 1fr);
+    overflow-x: auto;
+    padding-bottom: 2px;
+    margin-top: 0;
+  }
+
+  .nav-link {
+    min-height: 72px;
+    align-items: start;
+    border-radius: 20px;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .nav-text {
+    gap: 4px;
+  }
+
+  .user-panel {
+    margin-top: 0;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+  }
+
+  .page-header {
+    padding: 20px;
   }
 }
 
@@ -845,7 +1048,7 @@ p {
   .sidebar,
   .auth-shell,
   .auth-card {
-    padding: 20px;
+    padding: 16px;
   }
 
   .timeline-item,
@@ -862,5 +1065,79 @@ p {
   .registration-management-grid {
     align-items: start;
     flex-direction: column;
+  }
+
+  .sidebar-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+  }
+
+  .sidebar-toggle {
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .sidebar-toggle-label,
+  .nav-detail,
+  .user-meta,
+  .brand-copy {
+    display: none;
+  }
+
+  .nav-list {
+    grid-auto-columns: minmax(138px, 1fr);
+    gap: 10px;
+  }
+
+  .nav-link {
+    min-height: 64px;
+    padding: 12px;
+  }
+
+  .nav-label {
+    font-size: 0.84rem;
+  }
+
+  .nav-mobile-label {
+    display: inline;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: rgba(247, 239, 229, 0.7);
+  }
+
+  .page-shell {
+    gap: 18px;
+  }
+
+  .page-header {
+    padding: 18px;
+    gap: 14px;
+  }
+
+  .page-header h2 {
+    font-size: 2rem;
+  }
+
+  .feature-card,
+  .stat-card,
+  .mini-card,
+  .list-card {
+    padding: 18px;
+  }
+
+  .metric-row {
+    gap: 14px;
+  }
+
+  .chip,
+  .pill {
+    min-height: 30px;
+    font-size: 0.78rem;
+  }
+
+  .user-panel {
+    grid-template-columns: 1fr;
+    justify-items: start;
   }
 }

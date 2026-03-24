@@ -12,6 +12,7 @@ import type {
   Phase1State,
   RacerStatus,
   RegistrationStatus,
+  SeedingMode,
   StartMode,
   TiePolicy,
   TimingMode,
@@ -50,7 +51,10 @@ function createHeat(state: Phase1State, match: Match, laneCount: 2 | 4, heatNumb
     status:
       match.status === "completed"
         ? "completed"
-        : match.status === "ready" || match.status === "corrected" || match.status === "tied"
+        : match.status === "ready" ||
+            match.status === "corrected" ||
+            match.status === "tied" ||
+            match.status === "in_progress"
           ? "ready"
           : "pending",
   };
@@ -142,9 +146,12 @@ function syncLaneResults(state: Phase1State, match: Match, laneCount: 2 | 4) {
   heat.status =
     match.status === "completed"
       ? "completed"
-      : match.status === "ready" || match.status === "corrected" || match.status === "tied"
+      : match.status === "ready" ||
+          match.status === "corrected" ||
+          match.status === "tied" ||
+          match.status === "in_progress"
         ? "ready"
-        : "pending";
+      : "pending";
 }
 
 function appendAudit(
@@ -242,6 +249,7 @@ function clearDescendantMatches(state: Phase1State, match: Match, laneCount: 2 |
     }
   }
 
+  resetHeatsForMatch(state, match.id);
   clearLaneResultsForMatch(state, match, laneCount);
 }
 
@@ -353,6 +361,38 @@ function resequenceEventRegistrations(state: Phase1State, eventId: string) {
     });
 }
 
+function moveRegistrationToSeed(
+  state: Phase1State,
+  eventId: string,
+  registrationId: string,
+  requestedSeed: number,
+) {
+  const ordered = state.eventRegistrations
+    .filter((registration) => registration.eventId === eventId)
+    .sort((left, right) => {
+      const leftSeed = left.seed ?? Number.MAX_SAFE_INTEGER;
+      const rightSeed = right.seed ?? Number.MAX_SAFE_INTEGER;
+      if (leftSeed === rightSeed) {
+        return left.createdAt.localeCompare(right.createdAt);
+      }
+
+      return leftSeed - rightSeed;
+    });
+
+  const currentIndex = ordered.findIndex((registration) => registration.id === registrationId);
+  if (currentIndex === -1) {
+    throw new Error("Registration not found");
+  }
+
+  const [registration] = ordered.splice(currentIndex, 1);
+  const targetIndex = Math.min(Math.max(requestedSeed - 1, 0), ordered.length);
+  ordered.splice(targetIndex, 0, registration);
+
+  ordered.forEach((item, index) => {
+    item.seed = index + 1;
+  });
+}
+
 function nextPowerOfTwo(value: number) {
   let size = 1;
   while (size < value) {
@@ -368,6 +408,107 @@ function makeSlug(value: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function shuffleRegistrations(registrations: EventRegistration[]) {
+  const items = [...registrations];
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+  }
+
+  return items;
+}
+
+function buildFirstRoundPairings(
+  registrations: EventRegistration[],
+  size: number,
+  seedingMode: SeedingMode,
+) {
+  const working =
+    seedingMode === "random_draw"
+      ? shuffleRegistrations(registrations)
+      : [...registrations].sort(
+          (left, right) => (left.seed ?? Number.MAX_SAFE_INTEGER) - (right.seed ?? Number.MAX_SAFE_INTEGER),
+        );
+  const padded: Array<EventRegistration | null> = [...working];
+  while (padded.length < size) {
+    padded.push(null);
+  }
+
+  const pairs: Array<{ slotA: EventRegistration | null; slotB: EventRegistration | null }> = [];
+  const halfSize = size / 2;
+
+  if (seedingMode === "qualifier_split") {
+    for (let index = 0; index < halfSize; index += 1) {
+      pairs.push({
+        slotA: padded[index] ?? null,
+        slotB: padded[index + halfSize] ?? null,
+      });
+    }
+
+    return pairs;
+  }
+
+  if (seedingMode === "random_draw") {
+    for (let index = 0; index < halfSize; index += 1) {
+      pairs.push({
+        slotA: padded[index * 2] ?? null,
+        slotB: padded[index * 2 + 1] ?? null,
+      });
+    }
+
+    return pairs;
+  }
+
+  for (let index = 0; index < halfSize; index += 1) {
+    pairs.push({
+      slotA: padded[index] ?? null,
+      slotB: padded[padded.length - 1 - index] ?? null,
+    });
+  }
+
+  return pairs;
+}
+
+function getRequiredSeriesWins(matchRaceCount: 1 | 2 | 3) {
+  return Math.floor(matchRaceCount / 2) + 1;
+}
+
+function getHeatWinnerRegistrationId(state: Phase1State, heatId: string) {
+  return (
+    state.laneResults.find(
+      (laneResult) => laneResult.heatId === heatId && laneResult.finishPosition === 1,
+    )?.registrationId ?? null
+  );
+}
+
+function getSeriesScore(state: Phase1State, match: Match) {
+  let slotAWins = 0;
+  let slotBWins = 0;
+  let scoredHeatCount = 0;
+
+  getHeatsForMatch(state, match.id)
+    .filter((heat) => heat.status === "completed")
+    .forEach((heat) => {
+      const winnerId = getHeatWinnerRegistrationId(state, heat.id);
+      if (!winnerId) {
+        return;
+      }
+
+      scoredHeatCount += 1;
+      if (winnerId === match.slotARegistrationId) {
+        slotAWins += 1;
+      } else if (winnerId === match.slotBRegistrationId) {
+        slotBWins += 1;
+      }
+    });
+
+  return {
+    slotAWins,
+    slotBWins,
+    scoredHeatCount,
+  };
 }
 
 function canArchiveRacer(state: Phase1State, racerId: string) {
@@ -416,6 +557,8 @@ export function createEvent(
     timingMode: TimingMode;
     startMode: StartMode;
     tiePolicy: TiePolicy;
+    seedingMode: SeedingMode;
+    matchRaceCount: 1 | 2 | 3;
     status: EventStatus;
   },
   actorUserId: string,
@@ -442,6 +585,8 @@ export function createEvent(
       timingMode: input.timingMode,
       startMode: input.startMode,
       tiePolicy: input.tiePolicy,
+      seedingMode: input.seedingMode,
+      matchRaceCount: input.matchRaceCount,
       status: input.status,
       createdAt: new Date().toISOString(),
     });
@@ -469,6 +614,8 @@ export function createEvent(
       timingMode: input.timingMode,
       startMode: input.startMode,
       tiePolicy: input.tiePolicy,
+      seedingMode: input.seedingMode,
+      matchRaceCount: input.matchRaceCount,
     });
 
     return state;
@@ -875,6 +1022,8 @@ export function updateEventDetails(
     timingMode: TimingMode;
     startMode: StartMode;
     tiePolicy: TiePolicy;
+    seedingMode: SeedingMode;
+    matchRaceCount: 1 | 2 | 3;
   },
   actorUserId: string,
 ) {
@@ -901,6 +1050,14 @@ export function updateEventDetails(
       throw new Error("Lane count cannot change after the bracket has been generated");
     }
 
+    if (isRosterLocked(state, eventId) && input.seedingMode !== event.seedingMode) {
+      throw new Error("Seeding mode cannot change after the bracket has been generated");
+    }
+
+    if (isRosterLocked(state, eventId) && input.matchRaceCount !== event.matchRaceCount) {
+      throw new Error("Match series cannot change after the bracket has been generated");
+    }
+
     event.name = input.name.trim();
     event.eventDate = input.eventDate;
     event.locationName = input.locationName.trim() || track.locationName || null;
@@ -912,6 +1069,8 @@ export function updateEventDetails(
     event.timingMode = input.timingMode;
     event.startMode = input.startMode;
     event.tiePolicy = input.tiePolicy;
+    event.seedingMode = input.seedingMode;
+    event.matchRaceCount = input.matchRaceCount;
 
     appendAudit(state, actorUserId, "event", eventId, "event_details_updated", {
       laneCount: track.laneCount,
@@ -922,6 +1081,8 @@ export function updateEventDetails(
       timingMode: event.timingMode,
       startMode: event.startMode,
       tiePolicy: event.tiePolicy,
+      seedingMode: event.seedingMode,
+      matchRaceCount: event.matchRaceCount,
     });
 
     return state;
@@ -1261,6 +1422,44 @@ export function updateEventRegistrationCar(
   });
 }
 
+export function updateRegistrationSeed(
+  eventId: string,
+  registrationId: string,
+  seed: number,
+  actorUserId: string,
+) {
+  updateState((state) => {
+    const event = state.events.find((item) => item.id === eventId);
+    if (!event) {
+      throw new Error("Event not found");
+    }
+
+    if (isRosterLocked(state, eventId)) {
+      throw new Error("Qualifier seeding is locked after bracket generation");
+    }
+
+    if (!Number.isInteger(seed) || seed <= 0) {
+      throw new Error("Seed must be a positive number");
+    }
+
+    const registration = state.eventRegistrations.find(
+      (item) => item.id === registrationId && item.eventId === eventId,
+    );
+    if (!registration) {
+      throw new Error("Registration not found");
+    }
+
+    moveRegistrationToSeed(state, eventId, registrationId, seed);
+
+    appendAudit(state, actorUserId, "registration", registrationId, "registration_seed_updated", {
+      eventId,
+      seed,
+    });
+
+    return state;
+  });
+}
+
 export function removeEventRegistration(eventId: string, registrationId: string, actorUserId: string) {
   updateState((state) => {
     const event = state.events.find((item) => item.id === eventId);
@@ -1326,10 +1525,7 @@ export function generateBracketForEvent(eventId: string, actorUserId: string) {
     state.laneResults = state.laneResults.filter((laneResult) => !removedHeatIds.includes(laneResult.heatId));
 
     const size = nextPowerOfTwo(eligibleRegistrations.length);
-    const padded: Array<EventRegistration | null> = [...eligibleRegistrations];
-    while (padded.length < size) {
-      padded.push(null);
-    }
+    const pairings = buildFirstRoundPairings(eligibleRegistrations, size, event.seedingMode);
 
     const totalRounds = Math.log2(size);
     const newMatches: Match[] = [];
@@ -1359,8 +1555,9 @@ export function generateBracketForEvent(eventId: string, actorUserId: string) {
 
     const firstRoundMatches = newMatches.filter((match) => match.roundNumber === 1);
     firstRoundMatches.forEach((match, index) => {
-      match.slotARegistrationId = padded[index]?.id ?? null;
-      match.slotBRegistrationId = padded[padded.length - 1 - index]?.id ?? null;
+      const pairing = pairings[index];
+      match.slotARegistrationId = pairing?.slotA?.id ?? null;
+      match.slotBRegistrationId = pairing?.slotB?.id ?? null;
       setReadyStatus(match);
     });
 
@@ -1373,6 +1570,8 @@ export function generateBracketForEvent(eventId: string, actorUserId: string) {
     appendAudit(state, actorUserId, "event", eventId, "bracket_generated", {
       registrationCount: eligibleRegistrations.length,
       tournamentId: tournament.id,
+      seedingMode: event.seedingMode,
+      matchRaceCount: event.matchRaceCount,
     });
 
     return state;
@@ -1386,6 +1585,7 @@ export function recordMatchResult(
   actorUserId: string,
   note: string,
   laneTimesMs?: { slotA?: number | null; slotB?: number | null },
+  laneStatuses?: { slotA?: "finished" | "dnf" | "dq"; slotB?: "finished" | "dnf" | "dq" },
 ) {
   updateState((state) => {
     const event = state.events.find((item) => item.id === eventId);
@@ -1409,10 +1609,6 @@ export function recordMatchResult(
       throw new Error("Winner must be one of the match registrations");
     }
 
-    match.winnerRegistrationId = winnerRegistrationId;
-    match.status = "completed";
-    match.notes = note || match.notes;
-
     const heat = ensureHeat(state, match, event.laneCount);
     const [laneA, laneB] = eventLaneNumbers(event.laneCount);
     const loserRegistrationId =
@@ -1423,13 +1619,22 @@ export function recordMatchResult(
         laneNumber: laneA,
         registrationId: match.slotARegistrationId,
         elapsedMs: laneTimesMs?.slotA ?? null,
+        resultStatus: laneStatuses?.slotA ?? "finished",
       },
       {
         laneNumber: laneB,
         registrationId: match.slotBRegistrationId,
         elapsedMs: laneTimesMs?.slotB ?? null,
+        resultStatus: laneStatuses?.slotB ?? "finished",
       },
     ];
+
+    const winningAssignment = laneAssignments.find(
+      (assignment) => assignment.registrationId === winnerRegistrationId,
+    );
+    if (winningAssignment && winningAssignment.resultStatus !== "finished") {
+      throw new Error("Winning lane cannot be marked DNF or DQ");
+    }
 
     laneAssignments.forEach((assignment) => {
       const laneResult = state.laneResults.find(
@@ -1445,19 +1650,58 @@ export function recordMatchResult(
         laneResult.resultStatus = "finished";
         laneResult.finishPosition = 1;
       } else if (assignment.registrationId === loserRegistrationId) {
-        laneResult.resultStatus = "finished";
-        laneResult.finishPosition = 2;
+        laneResult.resultStatus = assignment.resultStatus;
+        laneResult.finishPosition = assignment.resultStatus === "finished" ? 2 : null;
       }
     });
 
     heat.status = "completed";
-    assignWinnerToNextMatch(state, match, event.laneCount);
+    const seriesScore = getSeriesScore(state, match);
+    const requiredSeriesWins = getRequiredSeriesWins(event.matchRaceCount);
+    const winnerWins =
+      winnerRegistrationId === match.slotARegistrationId ? seriesScore.slotAWins : seriesScore.slotBWins;
+    const slotAWins = seriesScore.slotAWins;
+    const slotBWins = seriesScore.slotBWins;
+    const seriesIsClinched = winnerWins >= requiredSeriesWins;
+    const scheduledSeriesComplete = seriesScore.scoredHeatCount >= event.matchRaceCount;
+    const hasSeriesLeader = slotAWins !== slotBWins;
+
+    if (seriesIsClinched || (scheduledSeriesComplete && hasSeriesLeader)) {
+      match.winnerRegistrationId = slotAWins > slotBWins ? match.slotARegistrationId : match.slotBRegistrationId;
+      match.status = "completed";
+      match.notes = note || `Series complete ${slotAWins}-${slotBWins}`;
+      assignWinnerToNextMatch(state, match, event.laneCount);
+    } else if (scheduledSeriesComplete && !hasSeriesLeader) {
+      match.winnerRegistrationId = null;
+      if (event.tiePolicy === "official_review") {
+        match.status = "tied";
+        match.notes = note || `Series tied ${slotAWins}-${slotBWins}. Official review required.`;
+      } else {
+        match.status = "in_progress";
+        match.notes = note || `Series tied ${slotAWins}-${slotBWins}. Tiebreaker heat queued.`;
+        ensureHeat(state, match, event.laneCount);
+        syncLaneResults(state, match, event.laneCount);
+      }
+    } else {
+      match.winnerRegistrationId = null;
+      match.status = "in_progress";
+      match.notes = note || `Series standing ${slotAWins}-${slotBWins}. Next heat queued.`;
+      ensureHeat(state, match, event.laneCount);
+      syncLaneResults(state, match, event.laneCount);
+    }
+
     refreshEventStatus(state, eventId);
     appendAudit(state, actorUserId, "match", matchId, "result_recorded", {
-      winnerRegistrationId,
+      heatWinnerRegistrationId: winnerRegistrationId,
+      matchWinnerRegistrationId: match.winnerRegistrationId,
       note: note || null,
       slotAElapsedMs: laneTimesMs?.slotA ?? null,
       slotBElapsedMs: laneTimesMs?.slotB ?? null,
+      slotAResultStatus: laneAssignments[0]?.resultStatus ?? "finished",
+      slotBResultStatus: laneAssignments[1]?.resultStatus ?? "finished",
+      slotAWins,
+      slotBWins,
+      matchRaceCount: event.matchRaceCount,
     });
 
     return state;
@@ -1495,7 +1739,7 @@ export function recordMatchTie(
     const [laneA, laneB] = eventLaneNumbers(event.laneCount);
 
     match.winnerRegistrationId = null;
-    match.status = "tied";
+    match.status = event.tiePolicy === "official_review" ? "tied" : "in_progress";
     match.notes =
       note.trim() ||
       (event.tiePolicy === "official_review"

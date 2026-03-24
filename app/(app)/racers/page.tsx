@@ -1,3 +1,4 @@
+import { CarCreationForm } from "@/components/car-creation-form";
 import { FlashBanner } from "@/components/flash-banner";
 import { FormSubmitButton } from "@/components/form-submit-button";
 import { PageShell } from "@/components/page-shell";
@@ -147,54 +148,12 @@ export default async function RacersPage({
                     <p className="list-meta">No cars added for this racer yet.</p>
                   )}
                   {racer.canAddCars ? (
-                    <form action={createRacerCarAction} className="event-create-form">
-                      <input name="ownerRacerId" type="hidden" value={racer.id} />
-                      <label className="form-field">
-                        <span>Nickname</span>
-                        <input name="nickname" required type="text" />
-                      </label>
-                      <label className="form-field">
-                        <span>Brand</span>
-                        <input name="brand" required type="text" />
-                      </label>
-                      <label className="form-field">
-                        <span>Model</span>
-                        <input name="model" required type="text" />
-                      </label>
-                      <label className="form-field">
-                        <span>Series</span>
-                        <input name="series" type="text" />
-                      </label>
-                      <label className="form-field">
-                        <span>Model year</span>
-                        <input inputMode="numeric" name="modelYear" type="text" />
-                      </label>
-                      <label className="form-field">
-                        <span>Status</span>
-                        <select defaultValue="race_ready" name="status">
-                          <option value="inspection">Inspection</option>
-                          <option value="checked_in">Checked In</option>
-                          <option value="race_ready">Race Ready</option>
-                        </select>
-                      </label>
-                      <label className="form-field">
-                        <span>Category</span>
-                        <input name="category" type="text" />
-                      </label>
-                      <label className="form-field">
-                        <span>Class</span>
-                        <input name="className" type="text" />
-                      </label>
-                      <label className="form-field form-field-span-full">
-                        <span>Notes</span>
-                        <textarea name="notes" rows={2} />
-                      </label>
-                      <FormSubmitButton
-                        className="button secondary compact-button"
-                        idleLabel="Add Car"
-                        pendingLabel="Adding..."
-                      />
-                    </form>
+                    <CarCreationForm
+                      action={createRacerCarAction}
+                      fixedOwnerRacerId={racer.id}
+                      pendingLabel="Adding..."
+                      submitLabel="Add Car"
+                    />
                   ) : null}
                 </div>
                 <form action={archiveRacerAction} className="status-form">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireEventAccess, requireRole } from "@/lib/auth";
 import { buildFlashPath } from "@/lib/flash";
+import { readState } from "@/lib/phase1-repository";
 import {
   createEventRegistration,
   createEventAssignment,
@@ -18,9 +19,18 @@ import {
   updateEventDetails,
   updateEventStatus,
   updateEventRegistrationCar,
+  updateRegistrationSeed,
   updateRegistrationStatus,
 } from "@/lib/phase1-operations";
-import type { EventStatus, RegistrationStatus, StartMode, TiePolicy, TimingMode } from "@/lib/types";
+import type {
+  EventStatus,
+  LaneResultStatus,
+  RegistrationStatus,
+  SeedingMode,
+  StartMode,
+  TiePolicy,
+  TimingMode,
+} from "@/lib/types";
 
 function revalidateEventViews(eventId?: string) {
   revalidatePath("/");
@@ -42,6 +52,8 @@ export async function createEventAction(formData: FormData) {
   const timingMode = formData.get("timingMode");
   const startMode = formData.get("startMode");
   const tiePolicy = formData.get("tiePolicy");
+  const seedingMode = formData.get("seedingMode");
+  const matchRaceCount = formData.get("matchRaceCount");
   const status = formData.get("status");
 
   if (
@@ -51,6 +63,8 @@ export async function createEventAction(formData: FormData) {
     typeof timingMode !== "string" ||
     typeof startMode !== "string" ||
     typeof tiePolicy !== "string" ||
+    typeof seedingMode !== "string" ||
+    typeof matchRaceCount !== "string" ||
     typeof status !== "string"
   ) {
     throw new Error("Event name, date, track, race settings, and status are required");
@@ -67,6 +81,8 @@ export async function createEventAction(formData: FormData) {
         timingMode: timingMode as TimingMode,
         startMode: startMode as StartMode,
         tiePolicy: tiePolicy as TiePolicy,
+        seedingMode: seedingMode as SeedingMode,
+        matchRaceCount: matchRaceCount === "2" ? 2 : matchRaceCount === "3" ? 3 : 1,
         status: status as EventStatus,
       },
       user.id,
@@ -112,6 +128,8 @@ export async function updateEventDetailsAction(formData: FormData) {
   const timingMode = formData.get("timingMode");
   const startMode = formData.get("startMode");
   const tiePolicy = formData.get("tiePolicy");
+  const seedingMode = formData.get("seedingMode");
+  const matchRaceCount = formData.get("matchRaceCount");
   const returnTo = formData.get("returnTo");
 
   if (
@@ -121,7 +139,9 @@ export async function updateEventDetailsAction(formData: FormData) {
     typeof trackId !== "string" ||
     typeof timingMode !== "string" ||
     typeof startMode !== "string" ||
-    typeof tiePolicy !== "string"
+    typeof tiePolicy !== "string" ||
+    typeof seedingMode !== "string" ||
+    typeof matchRaceCount !== "string"
   ) {
     throw new Error("Event id, name, date, track, and race settings are required");
   }
@@ -142,6 +162,8 @@ export async function updateEventDetailsAction(formData: FormData) {
         timingMode: timingMode as TimingMode,
         startMode: startMode as StartMode,
         tiePolicy: tiePolicy as TiePolicy,
+        seedingMode: seedingMode as SeedingMode,
+        matchRaceCount: matchRaceCount === "2" ? 2 : matchRaceCount === "3" ? 3 : 1,
       },
       user.id,
     );
@@ -264,6 +286,30 @@ export async function updateEventRegistrationCarAction(formData: FormData) {
   }
 }
 
+export async function updateRegistrationSeedAction(formData: FormData) {
+  const eventId = formData.get("eventId");
+  const registrationId = formData.get("registrationId");
+  const seed = formData.get("seed");
+
+  if (
+    typeof eventId !== "string" ||
+    typeof registrationId !== "string" ||
+    typeof seed !== "string"
+  ) {
+    throw new Error("Event id, registration id, and seed are required");
+  }
+
+  const user = await requireEventAccess(eventId, "manage");
+  try {
+    updateRegistrationSeed(eventId, registrationId, Number(seed), user.id);
+    revalidateEventViews(eventId);
+    redirect(buildFlashPath(`/events/${eventId}`, "success", "Qualifier seeding updated"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to update qualifier seeding";
+    redirect(buildFlashPath(`/events/${eventId}`, "error", message));
+  }
+}
+
 export async function removeEventRegistrationAction(formData: FormData) {
   const eventId = formData.get("eventId");
   const registrationId = formData.get("registrationId");
@@ -287,10 +333,11 @@ export async function recordMatchResultAction(formData: FormData) {
   const eventId = formData.get("eventId");
   const matchId = formData.get("matchId");
   const outcome = formData.get("outcome");
-  const winnerRegistrationId = formData.get("winnerRegistrationId");
   const note = formData.get("note");
   const slotASeconds = formData.get("slotASeconds");
   const slotBSeconds = formData.get("slotBSeconds");
+  const slotAStatus = formData.get("slotAStatus");
+  const slotBStatus = formData.get("slotBStatus");
 
   if (typeof eventId !== "string" || typeof matchId !== "string") {
     throw new Error("Event and match are required");
@@ -309,22 +356,69 @@ export async function recordMatchResultAction(formData: FormData) {
 
     return Math.round(parsed * 1000);
   };
+  const parseLaneStatus = (value: FormDataEntryValue | null) => {
+    if (value === "dnf" || value === "dq") {
+      return value as Extract<LaneResultStatus, "dnf" | "dq">;
+    }
+
+    return "finished" as const;
+  };
 
   try {
+    const state = readState();
+    const tournament = state.tournaments.find((item) => item.eventId === eventId);
+    const match =
+      tournament
+        ? state.matches.find((item) => item.id === matchId && item.tournamentId === tournament.id)
+        : null;
+
+    if (!match || !match.slotARegistrationId || !match.slotBRegistrationId) {
+      throw new Error("Match registrations are required");
+    }
+
     const laneTimes = {
       slotA: parseSeconds(slotASeconds),
       slotB: parseSeconds(slotBSeconds),
+    };
+    const laneStatuses = {
+      slotA: parseLaneStatus(slotAStatus),
+      slotB: parseLaneStatus(slotBStatus),
     };
     const noteValue = typeof note === "string" ? note : "";
 
     if (outcome === "tie") {
       recordMatchTie(eventId, matchId, user.id, noteValue, laneTimes);
     } else {
-      if (typeof winnerRegistrationId !== "string") {
-        throw new Error("Winner is required when recording a match result");
+      let calculatedWinnerRegistrationId: string | null = null;
+
+      if (laneStatuses.slotA === "finished" && laneStatuses.slotB === "finished") {
+        if (laneTimes.slotA === null || laneTimes.slotB === null) {
+          throw new Error("Enter both lane times to calculate a winner");
+        }
+
+        if (laneTimes.slotA === laneTimes.slotB) {
+          throw new Error("Lane times are tied. Use Record Tie instead");
+        }
+
+        calculatedWinnerRegistrationId =
+          laneTimes.slotA < laneTimes.slotB ? match.slotARegistrationId : match.slotBRegistrationId;
+      } else if (laneStatuses.slotA === "finished" && laneStatuses.slotB !== "finished") {
+        calculatedWinnerRegistrationId = match.slotARegistrationId;
+      } else if (laneStatuses.slotB === "finished" && laneStatuses.slotA !== "finished") {
+        calculatedWinnerRegistrationId = match.slotBRegistrationId;
+      } else {
+        throw new Error("Winner cannot be calculated from the current lane statuses");
       }
 
-      recordMatchResult(eventId, matchId, winnerRegistrationId, user.id, noteValue, laneTimes);
+      recordMatchResult(
+        eventId,
+        matchId,
+        calculatedWinnerRegistrationId,
+        user.id,
+        noteValue,
+        laneTimes,
+        laneStatuses,
+      );
     }
 
     revalidateEventViews(eventId);

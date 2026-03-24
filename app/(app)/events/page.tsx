@@ -90,6 +90,22 @@ export default async function EventsPage({
                 <option value="official_review">Official Review</option>
               </select>
             </label>
+            <label className="form-field">
+              <span>Seeding mode</span>
+              <select defaultValue="standard_seeded" name="seedingMode">
+                <option value="standard_seeded">Standard Seeded</option>
+                <option value="random_draw">Random Draw</option>
+                <option value="qualifier_split">Qualifier Split</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Match series</span>
+              <select defaultValue="1" name="matchRaceCount">
+                <option value="1">Single race</option>
+                <option value="2">Best of 2</option>
+                <option value="3">Best of 3</option>
+              </select>
+            </label>
             <label className="form-field form-field-span-full">
               <span>Description</span>
               <textarea
@@ -127,6 +143,9 @@ export default async function EventsPage({
                 </p>
                 <p className="muted">
                   {event.timingMode} • {event.startMode} • Tie policy: {event.tiePolicy}
+                </p>
+                <p className="muted">
+                  {event.seedingMode} • {event.matchSeriesLabel}
                 </p>
                 {event.descriptionValue ? <p className="muted">{event.descriptionValue}</p> : null}
               </div>
@@ -194,6 +213,26 @@ export default async function EventsPage({
                       <option value="official_review">Official Review</option>
                     </select>
                   </label>
+                  <label className="form-field">
+                    <span>Seeding mode</span>
+                    <select defaultValue={event.seedingModeValue} disabled={event.rosterLocked} name="seedingMode">
+                      <option value="standard_seeded">Standard Seeded</option>
+                      <option value="random_draw">Random Draw</option>
+                      <option value="qualifier_split">Qualifier Split</option>
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Match series</span>
+                    <select
+                      defaultValue={event.matchRaceCountValue}
+                      disabled={event.rosterLocked}
+                      name="matchRaceCount"
+                    >
+                      <option value="1">Single race</option>
+                      <option value="2">Best of 2</option>
+                      <option value="3">Best of 3</option>
+                    </select>
+                  </label>
                   <label className="form-field form-field-span-full">
                     <span>Description</span>
                     <textarea defaultValue={event.descriptionValue} name="description" rows={3} />
@@ -203,6 +242,12 @@ export default async function EventsPage({
                     <p className="list-meta">
                       Track selection drives lane count and length. If bracket structure is already locked,
                       choose a track with the same lane count as the current event.
+                    </p>
+                    <p className="list-meta">
+                      `Qualifier Split` uses ranking seeds like `1 vs 5, 2 vs 6`; `Random Draw` ignores seed order.
+                    </p>
+                    <p className="list-meta">
+                      Seeding mode and match series lock as soon as the bracket is generated.
                     </p>
                   </div>
                   <FormSubmitButton

@@ -17,6 +17,7 @@ export type EventAssignmentRole = "host" | "official";
 export type TimingMode = "manual_entry" | "track_timer";
 export type StartMode = "manual_gate" | "electronic_gate";
 export type TiePolicy = "rerun" | "official_review";
+export type SeedingMode = "standard_seeded" | "random_draw" | "qualifier_split";
 
 export interface User {
   id: string;
@@ -81,6 +82,8 @@ export interface Event {
   timingMode: TimingMode;
   startMode: StartMode;
   tiePolicy: TiePolicy;
+  seedingMode: SeedingMode;
+  matchRaceCount: 1 | 2 | 3;
   status: EventStatus;
   createdAt: string;
 }
