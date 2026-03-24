@@ -20,6 +20,7 @@ export default async function CarsPage({
   const user = await requireUser();
   const { activeCars, archivedCars, ownerOptions } = getCarList();
   const canManageCars = ["admin", "host"].includes(user.role);
+  const aiIdentifyEnabled = Boolean(process.env.OPENAI_API_KEY);
   const flashMessage =
     typeof resolvedSearchParams.flashMessage === "string" ? resolvedSearchParams.flashMessage : null;
   const flashTone =
@@ -39,6 +40,7 @@ export default async function CarsPage({
           <h3>Catalog Entry</h3>
           <CarCreationForm
             action={createCarAction}
+            aiIdentifyEnabled={aiIdentifyEnabled}
             ownerOptions={ownerOptions}
             pendingLabel="Creating..."
             submitLabel="Create Car"

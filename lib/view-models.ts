@@ -246,6 +246,228 @@ function getSeriesLabel(matchRaceCount: 1 | 2 | 3) {
   return matchRaceCount === 1 ? "Single race" : `Best of ${matchRaceCount}`;
 }
 
+function getPlacementLabel(position: number) {
+  if (position === 1) {
+    return "Champion";
+  }
+
+  if (position === 2) {
+    return "Runner-up";
+  }
+
+  if (position === 3) {
+    return "Semifinalist";
+  }
+
+  if (position <= 8) {
+    return "Quarterfinalist";
+  }
+
+  return "Bracket qualifier";
+}
+
+function getOrdinalLabel(value: number) {
+  const remainderHundred = value % 100;
+  if (remainderHundred >= 11 && remainderHundred <= 13) {
+    return `${value}th`;
+  }
+
+  const remainderTen = value % 10;
+  if (remainderTen === 1) {
+    return `${value}st`;
+  }
+
+  if (remainderTen === 2) {
+    return `${value}nd`;
+  }
+
+  if (remainderTen === 3) {
+    return `${value}rd`;
+  }
+
+  return `${value}th`;
+}
+
+function getChampionshipPoints(position: number) {
+  if (position === 1) {
+    return 10;
+  }
+
+  if (position === 2) {
+    return 7;
+  }
+
+  if (position === 3) {
+    return 5;
+  }
+
+  if (position === 4) {
+    return 3;
+  }
+
+  if (position <= 8) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function buildEventResultsData(state: Phase1State, eventId: string) {
+  const registrations = getRegistrationsForEvent(state, eventId);
+  const registrationStats = new Map(
+    registrations.map((registration) => [
+      registration.id,
+      {
+        registration,
+        wins: 0,
+        losses: 0,
+        bestElapsedMs: null as number | null,
+        highestRoundReached: 0,
+        eliminatedInRound: null as number | null,
+      },
+    ]),
+  );
+  const matches = getMatchesForEvent(state, eventId);
+  const matchIds = new Set(matches.map((match) => match.id));
+  const heatIds = new Set(
+    state.heats.filter((heat) => matchIds.has(heat.matchId)).map((heat) => heat.id),
+  );
+
+  for (const laneResult of state.laneResults.filter((item) => heatIds.has(item.heatId))) {
+    if (!laneResult.registrationId || !laneResult.elapsedMs) {
+      continue;
+    }
+
+    const existing = registrationStats.get(laneResult.registrationId);
+    if (!existing) {
+      continue;
+    }
+
+    if (existing.bestElapsedMs === null || laneResult.elapsedMs < existing.bestElapsedMs) {
+      existing.bestElapsedMs = laneResult.elapsedMs;
+    }
+  }
+
+  for (const match of matches.filter((item) => item.status === "completed")) {
+    const participants = [match.slotARegistrationId, match.slotBRegistrationId].filter(
+      (item): item is string => Boolean(item),
+    );
+
+    for (const participantId of participants) {
+      if (!registrationStats.has(participantId)) {
+        const registration = findRegistration(state, participantId);
+        if (registration) {
+          registrationStats.set(participantId, {
+            registration,
+            wins: 0,
+            losses: 0,
+            bestElapsedMs: null,
+            highestRoundReached: 0,
+            eliminatedInRound: null,
+          });
+        }
+      }
+    }
+
+    if (!match.winnerRegistrationId) {
+      continue;
+    }
+
+    const winner = registrationStats.get(match.winnerRegistrationId);
+    if (winner) {
+      winner.wins += 1;
+      winner.highestRoundReached = Math.max(winner.highestRoundReached, match.roundNumber);
+    }
+
+    for (const participantId of participants) {
+      if (participantId === match.winnerRegistrationId) {
+        continue;
+      }
+
+      const loser = registrationStats.get(participantId);
+      if (loser) {
+        loser.losses += 1;
+        loser.highestRoundReached = Math.max(loser.highestRoundReached, match.roundNumber);
+        loser.eliminatedInRound = Math.max(loser.eliminatedInRound ?? 0, match.roundNumber);
+      }
+    }
+  }
+
+  const totalRounds = matches.reduce((maxRound, match) => Math.max(maxRound, match.roundNumber), 0);
+  const sortedEntries = Array.from(registrationStats.values()).sort((left, right) => {
+    const leftPlacementScore = left.losses === 0 ? totalRounds + 1 : left.eliminatedInRound ?? 0;
+    const rightPlacementScore = right.losses === 0 ? totalRounds + 1 : right.eliminatedInRound ?? 0;
+
+    if (rightPlacementScore !== leftPlacementScore) {
+      return rightPlacementScore - leftPlacementScore;
+    }
+
+    if (right.wins !== left.wins) {
+      return right.wins - left.wins;
+    }
+
+    if (left.losses !== right.losses) {
+      return left.losses - right.losses;
+    }
+
+    if (left.bestElapsedMs !== null && right.bestElapsedMs !== null) {
+      return left.bestElapsedMs - right.bestElapsedMs;
+    }
+
+    if (left.bestElapsedMs !== null) {
+      return -1;
+    }
+
+    if (right.bestElapsedMs !== null) {
+      return 1;
+    }
+
+    return findRacerName(state, left.registration.id).localeCompare(
+      findRacerName(state, right.registration.id),
+    );
+  });
+
+  let previousPosition = 0;
+  let previousPlacementKey = "";
+  const leaderboardRows = sortedEntries.map((entry, index) => {
+    const placementScore = entry.losses === 0 ? totalRounds + 1 : entry.eliminatedInRound ?? 0;
+    const placementKey = [placementScore, entry.wins, entry.losses, entry.bestElapsedMs ?? "na"].join(":");
+    const position = placementKey === previousPlacementKey ? previousPosition : index + 1;
+    previousPosition = position;
+    previousPlacementKey = placementKey;
+
+    const racer = state.racerProfiles.find((item) => item.id === entry.registration.racerId);
+
+    return {
+      position,
+      positionLabel: getOrdinalLabel(position),
+      placementLabel: getPlacementLabel(position),
+      racer: racer?.displayName ?? "Unknown racer",
+      racerId: entry.registration.racerId,
+      car: findCarName(state, entry.registration.id),
+      record: `${entry.wins}-${entry.losses}`,
+      wins: entry.wins,
+      losses: entry.losses,
+      bestTime:
+        entry.bestElapsedMs !== null ? `${(entry.bestElapsedMs / 1000).toFixed(3)}s` : "No time",
+      bestElapsedMs: entry.bestElapsedMs,
+      eliminatedRoundLabel:
+        entry.losses === 0
+          ? "Won final"
+          : entry.eliminatedInRound
+            ? `Eliminated in round ${entry.eliminatedInRound}`
+            : "Still active",
+    };
+  });
+
+  return {
+    registrations,
+    matches,
+    leaderboardRows,
+    podiumRows: leaderboardRows.slice(0, 3),
+  };
+}
+
 export function getDashboardData() {
   const state = readState();
   const primaryEvent = state.events[0];
@@ -760,120 +982,207 @@ export function getResultsSnapshot(selectedEventId?: string) {
       registeredCount: 0,
       completedMatchCount: 0,
       totalMatchCount: 0,
+      completedSeasonEventCount: 0,
+      championshipRows: [],
+      championshipPodiumRows: [],
+      eventAwardRows: [],
+      seasonAwardRows: [],
+      podiumRows: [],
       leaderboardRows: [],
       latestMatches: [],
     };
   }
-
-  const registrations = getRegistrationsForEvent(state, selectedEvent.id);
-  const registrationStats = new Map(
-    registrations.map((registration) => [
-      registration.id,
-      {
-        registration,
-        wins: 0,
-        losses: 0,
-        bestElapsedMs: null as number | null,
-      },
-    ]),
-  );
-  const matches = getMatchesForEvent(state, selectedEvent.id);
-  const matchIds = new Set(matches.map((match) => match.id));
-  const heatIds = new Set(
-    state.heats.filter((heat) => matchIds.has(heat.matchId)).map((heat) => heat.id),
+  const { registrations, matches, leaderboardRows, podiumRows } = buildEventResultsData(
+    state,
+    selectedEvent.id,
   );
 
-  for (const laneResult of state.laneResults.filter((item) => heatIds.has(item.heatId))) {
-    if (!laneResult.registrationId || !laneResult.elapsedMs) {
-      continue;
+  const completedEvents = state.events
+    .filter((event) => event.status === "completed")
+    .sort((left, right) => left.eventDate.localeCompare(right.eventDate));
+  const championshipStats = new Map<
+    string,
+    {
+      racerId: string;
+      racer: string;
+      points: number;
+      events: number;
+      titles: number;
+      podiums: number;
+      bestFinish: number | null;
     }
+  >();
 
-    const existing = registrationStats.get(laneResult.registrationId);
-    if (!existing) {
-      continue;
-    }
+  for (const event of completedEvents) {
+    const eventResults = buildEventResultsData(state, event.id);
+    const seenRacers = new Set<string>();
 
-    if (existing.bestElapsedMs === null || laneResult.elapsedMs < existing.bestElapsedMs) {
-      existing.bestElapsedMs = laneResult.elapsedMs;
-    }
-  }
-
-  for (const match of matches.filter((item) => item.status === "completed")) {
-    const participants = [match.slotARegistrationId, match.slotBRegistrationId].filter(
-      (item): item is string => Boolean(item),
-    );
-
-    for (const participantId of participants) {
-      if (!registrationStats.has(participantId)) {
-        const registration = findRegistration(state, participantId);
-        if (registration) {
-          registrationStats.set(participantId, {
-            registration,
-            wins: 0,
-            losses: 0,
-            bestElapsedMs: null,
-          });
-        }
-      }
-    }
-
-    if (!match.winnerRegistrationId) {
-      continue;
-    }
-
-    const winner = registrationStats.get(match.winnerRegistrationId);
-    if (winner) {
-      winner.wins += 1;
-    }
-
-    for (const participantId of participants) {
-      if (participantId === match.winnerRegistrationId) {
+    for (const row of eventResults.leaderboardRows) {
+      if (seenRacers.has(row.racerId)) {
         continue;
       }
+      seenRacers.add(row.racerId);
 
-      const loser = registrationStats.get(participantId);
-      if (loser) {
-        loser.losses += 1;
-      }
+      const existing =
+        championshipStats.get(row.racerId) ??
+        {
+          racerId: row.racerId,
+          racer: row.racer,
+          points: 0,
+          events: 0,
+          titles: 0,
+          podiums: 0,
+          bestFinish: null,
+        };
+
+      existing.points += getChampionshipPoints(row.position);
+      existing.events += 1;
+      existing.titles += row.position === 1 ? 1 : 0;
+      existing.podiums += row.position <= 3 ? 1 : 0;
+      existing.bestFinish =
+        existing.bestFinish === null ? row.position : Math.min(existing.bestFinish, row.position);
+
+      championshipStats.set(row.racerId, existing);
     }
   }
 
-  const leaderboardRows = Array.from(registrationStats.values())
-    .sort((left, right) => {
-      if (right.wins !== left.wins) {
-        return right.wins - left.wins;
-      }
+  const sortedChampionshipEntries = Array.from(championshipStats.values()).sort((left, right) => {
+    if (right.points !== left.points) {
+      return right.points - left.points;
+    }
 
-      if (left.losses !== right.losses) {
-        return left.losses - right.losses;
-      }
+    if (right.titles !== left.titles) {
+      return right.titles - left.titles;
+    }
 
-      if (left.bestElapsedMs !== null && right.bestElapsedMs !== null) {
-        return left.bestElapsedMs - right.bestElapsedMs;
-      }
+    if (right.podiums !== left.podiums) {
+      return right.podiums - left.podiums;
+    }
 
-      if (left.bestElapsedMs !== null) {
-        return -1;
-      }
+    if (left.bestFinish !== null && right.bestFinish !== null && left.bestFinish !== right.bestFinish) {
+      return left.bestFinish - right.bestFinish;
+    }
 
-      if (right.bestElapsedMs !== null) {
-        return 1;
-      }
+    return left.racer.localeCompare(right.racer);
+  });
 
-      return findRacerName(state, left.registration.id).localeCompare(
-        findRacerName(state, right.registration.id),
-      );
-    })
-    .map((entry, index) => ({
-      position: index + 1,
-      racer: findRacerName(state, entry.registration.id),
-      car: findCarName(state, entry.registration.id),
-      record: `${entry.wins}-${entry.losses}`,
-      wins: entry.wins,
-      losses: entry.losses,
-      bestTime:
-        entry.bestElapsedMs !== null ? `${(entry.bestElapsedMs / 1000).toFixed(3)}s` : "No time",
-    }));
+  let previousChampionshipPosition = 0;
+  let previousChampionshipKey = "";
+  const championshipRows = sortedChampionshipEntries.map((entry, index) => {
+    const rankingKey = [entry.points, entry.titles, entry.podiums, entry.bestFinish ?? "na"].join(":");
+    const position =
+      rankingKey === previousChampionshipKey ? previousChampionshipPosition : index + 1;
+    previousChampionshipPosition = position;
+    previousChampionshipKey = rankingKey;
+
+    return {
+      position,
+      positionLabel: getOrdinalLabel(position),
+      racer: entry.racer,
+      points: entry.points,
+      events: entry.events,
+      titles: entry.titles,
+      podiums: entry.podiums,
+      bestFinish: entry.bestFinish ? getOrdinalLabel(entry.bestFinish) : "N/A",
+    };
+  });
+
+  const fastestEventRow = leaderboardRows.reduce<(typeof leaderboardRows)[number] | null>((fastest, row) => {
+    if (row.bestElapsedMs === null) {
+      return fastest;
+    }
+
+    if (fastest === null || fastest.bestElapsedMs === null || row.bestElapsedMs < fastest.bestElapsedMs) {
+      return row;
+    }
+
+    return fastest;
+  }, null);
+  const championRow = leaderboardRows.find((row) => row.position === 1) ?? null;
+  const runnerUpRow = leaderboardRows.find((row) => row.position === 2) ?? null;
+  const eventAwardRows = [
+    championRow
+      ? {
+          title: "Champion",
+          winner: championRow.racer,
+          detail: `${championRow.car} • ${championRow.record}`,
+        }
+      : null,
+    runnerUpRow
+      ? {
+          title: "Runner-up",
+          winner: runnerUpRow.racer,
+          detail: `${runnerUpRow.car} • ${runnerUpRow.record}`,
+        }
+      : null,
+    fastestEventRow
+      ? {
+          title: "Fastest Pass",
+          winner: fastestEventRow.racer,
+          detail: `${fastestEventRow.bestTime} • ${fastestEventRow.car}`,
+        }
+      : null,
+    championRow && championRow.losses === 0
+      ? {
+          title: "Clean Sweep",
+          winner: championRow.racer,
+          detail: `${championRow.record} with no bracket losses`,
+        }
+      : null,
+  ].filter((award): award is { title: string; winner: string; detail: string } => Boolean(award));
+
+  const pointsLeaderRow = championshipRows[0] ?? null;
+  const mostTitlesRow =
+    championshipRows
+      .filter((row) => row.titles > 0)
+      .sort((left, right) => {
+        if (right.titles !== left.titles) {
+          return right.titles - left.titles;
+        }
+
+        if (right.points !== left.points) {
+          return right.points - left.points;
+        }
+
+        return left.racer.localeCompare(right.racer);
+      })[0] ?? null;
+  const mostPodiumsRow =
+    championshipRows
+      .filter((row) => row.podiums > 0)
+      .sort((left, right) => {
+        if (right.podiums !== left.podiums) {
+          return right.podiums - left.podiums;
+        }
+
+        if (right.points !== left.points) {
+          return right.points - left.points;
+        }
+
+        return left.racer.localeCompare(right.racer);
+      })[0] ?? null;
+  const seasonAwardRows = [
+    pointsLeaderRow
+      ? {
+          title: "Points Leader",
+          winner: pointsLeaderRow.racer,
+          detail: `${pointsLeaderRow.points} pts across ${pointsLeaderRow.events} events`,
+        }
+      : null,
+    mostTitlesRow
+      ? {
+          title: "Most Titles",
+          winner: mostTitlesRow.racer,
+          detail: `${mostTitlesRow.titles} event win${mostTitlesRow.titles === 1 ? "" : "s"}`,
+        }
+      : null,
+    mostPodiumsRow
+      ? {
+          title: "Podium Leader",
+          winner: mostPodiumsRow.racer,
+          detail: `${mostPodiumsRow.podiums} podium finish${mostPodiumsRow.podiums === 1 ? "" : "es"}`,
+        }
+      : null,
+  ].filter((award): award is { title: string; winner: string; detail: string } => Boolean(award));
 
   const latestMatches = matches
     .slice()
@@ -906,6 +1215,12 @@ export function getResultsSnapshot(selectedEventId?: string) {
     registeredCount: registrations.length,
     completedMatchCount: matches.filter((match) => match.status === "completed").length,
     totalMatchCount: matches.length,
+    completedSeasonEventCount: completedEvents.length,
+    championshipRows,
+    championshipPodiumRows: championshipRows.slice(0, 3),
+    eventAwardRows,
+    seasonAwardRows,
+    podiumRows,
     leaderboardRows,
     latestMatches,
   };

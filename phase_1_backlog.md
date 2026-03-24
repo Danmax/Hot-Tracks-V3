@@ -29,11 +29,11 @@ Status labels:
 - File-backed mutable state plus SQL reference schema docs
 
 ### Partial
-- Racer management is read-only list/detail style, not true CRUD
-- Car management is read-only list/detail style, not true CRUD
+- Racer management is implemented, but still dense on mobile and lacks participant self-service
+- Car management is implemented, but photo identification and media handling still need hardening
 - Admin user management is visibility-only, not editable
-- Results are useful, but still centered around a primary event snapshot
-- Dashboard copy and milestone text still lag the actual implementation state
+- Results now support event selection, placement-based standings, and championship points, but still need awards publishing
+- Dashboard/system-map copy has moved forward, but the backlog needs a real Phase 2 track
 - Persistence is real enough for local development, but still JSON-backed
 
 ### Missing
@@ -42,7 +42,6 @@ Status labels:
 - Car create/edit/archive flows
 - Real database adapter
 - End-to-end tests
-- Better event standings/final placement logic
 
 ## Epic 1: Foundation And Access
 Status: `done`
@@ -67,12 +66,9 @@ Status: `partial`
 - owner linkage and event-derived summary data
 
 ### Remaining
-- create racer flow
-- edit racer flow
-- archive racer flow
-- create car flow
-- edit car flow
-- archive car flow
+- participant-facing racer ownership and profile management
+- media/photo persistence for cars beyond transient identification
+- better mobile action density for racer and car maintenance
 
 ### Done When
 - hosts can create and edit racers without file edits
@@ -141,14 +137,13 @@ Status: `done`
 Status: `partial`
 
 ### Delivered
-- results page with leaderboard and recent matches
+- results page with event placements, championship standings, and recent matches
 - admin page with user list and audit history
 - role-protected admin route
 
 ### Remaining
-- final placement logic should move beyond simple win totals
 - admin user management should support actual edits
-- results should support event selection instead of only the primary event snapshot
+- awards and podium publishing workflow
 
 ## Epic 8: Persistence And Reliability
 Status: `next`
@@ -166,11 +161,25 @@ Status: `next`
 
 ## Immediate Priority Order
 1. Add guarded event archive/delete rules
-2. Build true racer CRUD
-3. Build true car CRUD
-4. Replace JSON-backed state with a real database adapter
-5. Improve results to support event-specific standings and placements
-6. Add automated tests for auth, roster rules, bracket generation, and corrections
+2. Replace JSON-backed state with a real database adapter
+3. Add automated tests for auth, roster rules, bracket generation, and corrections
+4. Build editable admin user management
+5. Add awards and podium publishing workflow
+6. Harden media/photo flows for car records
+
+## Phase 2 Direction
+
+### Candidate Focus
+- championship standings across multiple events
+- awards and podium publishing
+- sponsor and team metadata
+- participant self-service for drivers and garages
+- persistent car photos and richer item records
+
+### Recommended First Slice
+- build awards and podium publishing from placement/championship data
+- add sponsor and team metadata into event and season views
+- expose participant self-service for drivers and garages
 
 ## Milestones
 

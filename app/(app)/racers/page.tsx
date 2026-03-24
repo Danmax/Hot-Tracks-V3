@@ -21,6 +21,7 @@ export default async function RacersPage({
   const user = await requireUser();
   const { activeRacers, archivedRacers } = getRacerList();
   const canManageRacers = ["admin", "host"].includes(user.role);
+  const aiIdentifyEnabled = Boolean(process.env.OPENAI_API_KEY);
   const flashMessage =
     typeof resolvedSearchParams.flashMessage === "string" ? resolvedSearchParams.flashMessage : null;
   const flashTone =
@@ -150,6 +151,7 @@ export default async function RacersPage({
                   {racer.canAddCars ? (
                     <CarCreationForm
                       action={createRacerCarAction}
+                      aiIdentifyEnabled={aiIdentifyEnabled}
                       fixedOwnerRacerId={racer.id}
                       pendingLabel="Adding..."
                       submitLabel="Add Car"

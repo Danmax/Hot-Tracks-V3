@@ -147,6 +147,20 @@
       "notes": "Needs close DQ review on contact calls",
       "status": "race_ready",
       "createdAt": "2026-03-21T08:12:00Z"
+    },
+    {
+      "id": "c_batmobile_033032",
+      "ownerRacerId": "r_maya",
+      "nickname": "Batmobile",
+      "brand": "cDF",
+      "model": "Classic",
+      "series": null,
+      "modelYear": null,
+      "category": null,
+      "className": null,
+      "notes": null,
+      "status": "race_ready",
+      "createdAt": "2026-03-24T06:00:33.032Z"
     }
   ],
   "tracks": [
@@ -629,6 +643,15 @@
       "action": "user_signed_up",
       "metadataJson": "{\"email\":\"danmax@frowear.com\",\"role\":\"participant\",\"source\":\"self_signup\"}",
       "createdAt": "2026-03-24T05:06:15.661Z"
+    },
+    {
+      "id": "audit_1774332033032_18",
+      "actorUserId": "u_admin",
+      "entityType": "car",
+      "entityId": "c_batmobile_033032",
+      "action": "car_created",
+      "metadataJson": "{\"ownerRacerId\":\"r_maya\",\"nickname\":\"Batmobile\",\"status\":\"race_ready\"}",
+      "createdAt": "2026-03-24T06:00:33.032Z"
     }
   ]
 }

@@ -29,6 +29,15 @@ function parseModelYear(value: FormDataEntryValue | null) {
   return Math.round(parsed);
 }
 
+function isRedirectError(error: unknown) {
+  return (
+    error instanceof Error &&
+    "digest" in error &&
+    typeof error.digest === "string" &&
+    error.digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
 export async function createCarAction(formData: FormData) {
   const user = await requireRole(["admin", "host"]);
   const ownerRacerId = formData.get("ownerRacerId");
@@ -76,6 +85,9 @@ export async function createCarAction(formData: FormData) {
     revalidateCarViews();
     redirect(buildFlashPath("/cars", "success", "Car created"));
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : "Unable to create car";
     redirect(buildFlashPath("/cars", "error", message));
   }
@@ -131,6 +143,9 @@ export async function updateCarAction(formData: FormData) {
     revalidateCarViews();
     redirect(buildFlashPath("/cars", "success", "Car updated"));
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : "Unable to update car";
     redirect(buildFlashPath("/cars", "error", message));
   }
@@ -149,6 +164,9 @@ export async function archiveCarAction(formData: FormData) {
     revalidateCarViews();
     redirect(buildFlashPath("/cars", "success", "Car archived"));
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : "Unable to archive car";
     redirect(buildFlashPath("/cars", "error", message));
   }

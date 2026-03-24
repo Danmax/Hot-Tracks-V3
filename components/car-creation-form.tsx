@@ -28,12 +28,14 @@ type IdentifyResponse = {
 
 export function CarCreationForm({
   action,
+  aiIdentifyEnabled = false,
   ownerOptions = [],
   fixedOwnerRacerId,
   submitLabel,
   pendingLabel,
 }: Readonly<{
   action: (formData: FormData) => void | Promise<void>;
+  aiIdentifyEnabled?: boolean;
   ownerOptions?: OwnerOption[];
   fixedOwnerRacerId?: string;
   submitLabel: string;
@@ -138,10 +140,15 @@ export function CarCreationForm({
             <p className="list-meta">
               Use your camera or library to suggest the die-cast brand and model, then confirm before saving.
             </p>
+            {!aiIdentifyEnabled ? (
+              <p className="list-meta">
+                AI identify is unavailable until `OPENAI_API_KEY` is configured for this app.
+              </p>
+            ) : null}
           </div>
           <button
             className="button secondary compact-button"
-            disabled={identifyPending}
+            disabled={identifyPending || !aiIdentifyEnabled || !photoFile}
             onClick={handleIdentifyFromPhoto}
             type="button"
           >
