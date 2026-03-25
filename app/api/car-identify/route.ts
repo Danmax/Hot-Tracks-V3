@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
+
+const IDENTIFY_WINDOW_MS = 5 * 60 * 1000;
+const IDENTIFY_LIMIT = 10;
+const identifyAttempts = new Map<string, { count: number; resetAt: number }>();
 
 type CarSuggestion = {
   brand: string;
@@ -68,7 +73,53 @@ function normalizeSuggestion(value: Partial<CarSuggestion>): CarSuggestion {
   };
 }
 
+function consumeIdentifyQuota(key: string) {
+  const now = Date.now();
+  const current = identifyAttempts.get(key);
+
+  if (!current || current.resetAt <= now) {
+    identifyAttempts.set(key, { count: 1, resetAt: now + IDENTIFY_WINDOW_MS });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  if (current.count >= IDENTIFY_LIMIT) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
+    };
+  }
+
+  current.count += 1;
+  identifyAttempts.set(key, current);
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
 export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, message: "Sign in to identify car photos" }, { status: 401 });
+  }
+
+  if (!["admin", "host"].includes(user.role)) {
+    return NextResponse.json(
+      { ok: false, message: "Only host and admin accounts can identify car photos" },
+      { status: 403 },
+    );
+  }
+
+  const quota = consumeIdentifyQuota(user.id);
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { ok: false, message: "Too many identify attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(quota.retryAfterSeconds),
+        },
+      },
+    );
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -124,7 +175,7 @@ export async function POST(request: Request) {
             {
               type: "input_image",
               image_url: dataUrl,
-              detail: "high",
+              detail: "low",
             },
           ],
         },

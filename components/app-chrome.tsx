@@ -5,6 +5,9 @@ import { Navigation } from "@/components/navigation";
 import { SignOutForm } from "@/components/sign-out-form";
 
 const SIDEBAR_STORAGE_KEY = "hot_tracks_sidebar_collapsed";
+const THEME_STORAGE_KEY = "hot_tracks_theme";
+
+type ThemeMode = "light" | "dark";
 
 function initialsForName(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -33,16 +36,30 @@ export function AppChrome({
   userRole: "admin" | "host" | "official" | "participant";
 }>) {
   const [collapsed, setCollapsed] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>("light");
   const initials = useMemo(() => initialsForName(userName), [userName]);
 
   useEffect(() => {
     const storedValue = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
     setCollapsed(storedValue === "true");
+
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (storedTheme === "light" || storedTheme === "dark") {
+      setTheme(storedTheme);
+      return;
+    }
+
+    setTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   }, []);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
   }, [collapsed]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   return (
     <div className={collapsed ? "app-frame sidebar-collapsed" : "app-frame"}>
@@ -74,6 +91,27 @@ export function AppChrome({
               Mobile-ready garage operations for participant setup, track building, event control, and championship flow.
             </p>
           ) : null}
+        </div>
+
+        <div className="theme-switcher" aria-label="Theme options" role="group">
+          <button
+            aria-label="Use light theme"
+            aria-pressed={theme === "light"}
+            className={theme === "light" ? "theme-option active" : "theme-option"}
+            onClick={() => setTheme("light")}
+            type="button"
+          >
+            Light
+          </button>
+          <button
+            aria-label="Use dark theme"
+            aria-pressed={theme === "dark"}
+            className={theme === "dark" ? "theme-option active" : "theme-option"}
+            onClick={() => setTheme("dark")}
+            type="button"
+          >
+            Dark
+          </button>
         </div>
 
         <div className="mobile-user-banner">

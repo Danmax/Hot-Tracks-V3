@@ -40,133 +40,135 @@ export default async function EventsPage({
     >
       {flashMessage && flashTone ? <FlashBanner message={flashMessage} tone={flashTone} /> : null}
       {canManageEvents ? (
-        <section className="feature-card">
-          <p className="eyebrow">Create event</p>
-          <h3>Host Setup</h3>
-          <form action={createEventAction} className="event-create-form">
-            <label className="form-field">
-              <span>Event name</span>
-              <input name="name" placeholder="Spring Track Showdown" required type="text" />
-            </label>
-            <label className="form-field">
-              <span>Date</span>
-              <input name="eventDate" required type="date" />
-            </label>
-            <label className="form-field">
-              <span>Location</span>
-              <input name="locationName" placeholder="Garage or venue" type="text" />
-            </label>
-            <label className="form-field">
-              <span>Track</span>
-              <select defaultValue="" name="trackId" required>
-                <option disabled value="">
-                  Select track
-                </option>
-                {events[0]?.trackOptions.map((track) => (
-                  <option key={track.id} value={track.id}>
-                    {track.label}
+        <details className="feature-card disclosure-card">
+          <summary className="disclosure-summary">
+            <div className="disclosure-summary-main">
+              <p className="eyebrow">Create event</p>
+              <h3>Add Tournament Event</h3>
+              <p className="list-meta">Open the full setup form only when you need a new tournament event.</p>
+            </div>
+            <span className="chip disclosure-chip">New</span>
+          </summary>
+          <div className="disclosure-content">
+            <form action={createEventAction} className="event-create-form">
+              <label className="form-field">
+                <span>Event name</span>
+                <input name="name" placeholder="Spring Track Showdown" required type="text" />
+              </label>
+              <label className="form-field">
+                <span>Date</span>
+                <input name="eventDate" required type="date" />
+              </label>
+              <label className="form-field">
+                <span>Location</span>
+                <input name="locationName" placeholder="Garage or venue" type="text" />
+              </label>
+              <label className="form-field">
+                <span>Track</span>
+                <select defaultValue="" name="trackId" required>
+                  <option disabled value="">
+                    Select track
                   </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Timing mode</span>
-              <select defaultValue="manual_entry" name="timingMode">
-                <option value="manual_entry">Manual Entry</option>
-                <option value="track_timer">Track Timer</option>
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Start mode</span>
-              <select defaultValue="manual_gate" name="startMode">
-                <option value="manual_gate">Manual Gate</option>
-                <option value="electronic_gate">Electronic Gate</option>
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Tie policy</span>
-              <select defaultValue="rerun" name="tiePolicy">
-                <option value="rerun">Rerun</option>
-                <option value="official_review">Official Review</option>
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Seeding mode</span>
-              <select defaultValue="standard_seeded" name="seedingMode">
-                <option value="standard_seeded">Standard Seeded</option>
-                <option value="random_draw">Random Draw</option>
-                <option value="qualifier_split">Qualifier Split</option>
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Match series</span>
-              <select defaultValue="1" name="matchRaceCount">
-                <option value="1">Single race</option>
-                <option value="2">Best of 2</option>
-                <option value="3">Best of 3</option>
-              </select>
-            </label>
-            <label className="form-field form-field-span-full">
-              <span>Description</span>
-              <textarea
-                name="description"
-                placeholder="What should hosts and officials know about this event?"
-                rows={3}
+                  {events[0]?.trackOptions.map((track) => (
+                    <option key={track.id} value={track.id}>
+                      {track.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-field">
+                <span>Timing mode</span>
+                <select defaultValue="manual_entry" name="timingMode">
+                  <option value="manual_entry">Manual Entry</option>
+                  <option value="track_timer">Track Timer</option>
+                </select>
+              </label>
+              <label className="form-field">
+                <span>Start mode</span>
+                <select defaultValue="manual_gate" name="startMode">
+                  <option value="manual_gate">Manual Gate</option>
+                  <option value="electronic_gate">Electronic Gate</option>
+                </select>
+              </label>
+              <label className="form-field">
+                <span>Tie policy</span>
+                <select defaultValue="rerun" name="tiePolicy">
+                  <option value="rerun">Rerun</option>
+                  <option value="official_review">Official Review</option>
+                </select>
+              </label>
+              <label className="form-field">
+                <span>Seeding mode</span>
+                <select defaultValue="standard_seeded" name="seedingMode">
+                  <option value="standard_seeded">Standard Seeded</option>
+                  <option value="random_draw">Random Draw</option>
+                  <option value="qualifier_split">Qualifier Split</option>
+                </select>
+              </label>
+              <label className="form-field">
+                <span>Match series</span>
+                <select defaultValue="1" name="matchRaceCount">
+                  <option value="1">Single race</option>
+                  <option value="2">Best of 2</option>
+                  <option value="3">Best of 3</option>
+                </select>
+              </label>
+              <label className="form-field form-field-span-full">
+                <span>Description</span>
+                <textarea
+                  name="description"
+                  placeholder="What should hosts and officials know about this event?"
+                  rows={3}
+                />
+              </label>
+              <label className="form-field">
+                <span>Status</span>
+                <select defaultValue="draft" name="status">
+                  <option value="draft">Draft</option>
+                  <option value="registration_open">Registration Open</option>
+                  <option value="checkin">Check-In</option>
+                </select>
+              </label>
+              <FormSubmitButton
+                className="button primary compact-button"
+                idleLabel="Create Event"
+                pendingLabel="Creating..."
               />
-            </label>
-            <label className="form-field">
-              <span>Status</span>
-              <select defaultValue="draft" name="status">
-                <option value="draft">Draft</option>
-                <option value="registration_open">Registration Open</option>
-                <option value="checkin">Check-In</option>
-              </select>
-            </label>
-            <FormSubmitButton
-              className="button primary compact-button"
-              idleLabel="Create Event"
-              pendingLabel="Creating..."
-            />
-          </form>
-        </section>
+            </form>
+          </div>
+        </details>
       ) : null}
 
       <div className="stack">
         {events.map((event) => (
-          <article className="feature-card" key={event.id}>
-            <div className="split-row">
-              <div>
+          <details className="feature-card disclosure-card" key={event.id}>
+            <summary className="disclosure-summary">
+              <div className="disclosure-summary-main">
                 <p className="eyebrow">{event.statusLabel}</p>
                 <h3>{event.name}</h3>
                 <p className="muted">
-                  {event.date} • {event.location} • Track: {event.trackName} • {event.trackLength} • Host: {event.hostName}
+                  {event.date} • {event.location} • Track: {event.trackName} • {event.trackLength}
                 </p>
+                <p className="muted">
+                  Host: {event.hostName} • {event.seedingMode} • {event.matchSeriesLabel}
+                </p>
+              </div>
+              <div className="chip-row wrap-row disclosure-actions">
+                <span className="pill">{event.laneCount}-lane</span>
+                <span className="chip">Checked in: {event.checkedInCount}</span>
+                <span className="chip">Bracket: {event.format}</span>
+                <span className="chip">{event.progress}</span>
+              </div>
+            </summary>
+            <div className="disclosure-content stack compact">
+              <div className="stack compact">
                 <p className="muted">
                   {event.timingMode} • {event.startMode} • Tie policy: {event.tiePolicy}
                 </p>
-                <p className="muted">
-                  {event.seedingMode} • {event.matchSeriesLabel}
-                </p>
                 {event.descriptionValue ? <p className="muted">{event.descriptionValue}</p> : null}
               </div>
-              <span className="pill">{event.laneCount}-lane</span>
-            </div>
-            <div className="metric-row">
-              <div>
-                <span>Checked In</span>
-                <strong>{event.checkedInCount}</strong>
-              </div>
-              <div>
-                <span>Bracket</span>
-                <strong>{event.format}</strong>
-              </div>
-              <div>
-                <span>Stage</span>
-                <strong>{event.progress}</strong>
-              </div>
-            </div>
-            {canManageEvents && manageableEventIds.has(event.id) ? (
-              <>
+              {canManageEvents && manageableEventIds.has(event.id) ? (
+                <>
                 <form action={updateEventDetailsAction} className="event-create-form">
                   <input name="eventId" type="hidden" value={event.id} />
                   <input name="returnTo" type="hidden" value="/events" />
@@ -389,16 +391,17 @@ export default async function EventsPage({
                     </form>
                   </div>
                 </div>
-              </>
-            ) : null}
-            {canOperateEvents && operableEventIds.has(event.id) ? (
-              <div className="actions-row">
-                <Link className="button secondary compact-button" href={`/events/${event.id}`}>
-                  Open workspace
-                </Link>
-              </div>
-            ) : null}
-          </article>
+                </>
+              ) : null}
+              {canOperateEvents && operableEventIds.has(event.id) ? (
+                <div className="actions-row">
+                  <Link className="button secondary compact-button" href={`/events/${event.id}`}>
+                    Open workspace
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          </details>
         ))}
       </div>
     </PageShell>

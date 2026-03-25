@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { readState } from "@/lib/phase1-repository";
@@ -8,6 +8,7 @@ import type { User, UserRole } from "@/lib/types";
 
 export const SESSION_COOKIE = "hot_tracks_session";
 export const DEMO_PASSWORD = "demo123";
+const DEV_SESSION_SECRET = "dev-only-hot-tracks-session-secret";
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -35,9 +36,50 @@ export function verifyPassword(password: string, passwordHash: string) {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
+function getSessionSecret() {
+  const configuredSecret = process.env.SESSION_SECRET;
+  if (configuredSecret && configuredSecret.length >= 16) {
+    return configuredSecret;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET must be set to a value of at least 16 characters");
+  }
+
+  return DEV_SESSION_SECRET;
+}
+
+export function createSessionCookieValue(userId: string) {
+  const signature = createHmac("sha256", getSessionSecret()).update(userId).digest("hex");
+  return `${userId}.${signature}`;
+}
+
+function readSessionUserId(cookieValue: string | undefined) {
+  if (!cookieValue) {
+    return null;
+  }
+
+  const separatorIndex = cookieValue.lastIndexOf(".");
+  if (separatorIndex <= 0 || separatorIndex === cookieValue.length - 1) {
+    return null;
+  }
+
+  const userId = cookieValue.slice(0, separatorIndex);
+  const providedSignature = cookieValue.slice(separatorIndex + 1);
+  const expectedSignature = createHmac("sha256", getSessionSecret()).update(userId).digest("hex");
+  const provided = Buffer.from(providedSignature, "hex");
+  const expected = Buffer.from(expectedSignature, "hex");
+
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    return null;
+  }
+
+  return userId;
+}
+
 export async function getSessionUser(): Promise<User | null> {
   const cookieStore = await cookies();
-  const userId = cookieStore.get(SESSION_COOKIE)?.value;
+  const userId = readSessionUserId(cookieStore.get(SESSION_COOKIE)?.value);
 
   if (!userId) {
     return null;

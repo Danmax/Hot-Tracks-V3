@@ -36,60 +36,68 @@ export default async function RacersPage({
     >
       {flashMessage && flashTone ? <FlashBanner message={flashMessage} tone={flashTone} /> : null}
       {canManageRacers ? (
-        <section className="feature-card">
-          <p className="eyebrow">Create racer</p>
-          <h3>Roster Entry</h3>
-          <form action={createRacerAction} className="event-create-form">
-            <label className="form-field">
-              <span>First name</span>
-              <input name="firstName" required type="text" />
-            </label>
-            <label className="form-field">
-              <span>Last name</span>
-              <input name="lastName" required type="text" />
-            </label>
-            <label className="form-field">
-              <span>Display name</span>
-              <input name="displayName" placeholder="Optional override" type="text" />
-            </label>
-            <label className="form-field">
-              <span>Garage</span>
-              <input name="garageName" placeholder="Independent" type="text" />
-            </label>
-            <label className="form-field">
-              <span>Status</span>
-              <select defaultValue="active" name="status">
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </label>
-            <FormSubmitButton
-              className="button primary compact-button"
-              idleLabel="Create Racer"
-              pendingLabel="Creating..."
-            />
-          </form>
-        </section>
+        <details className="feature-card disclosure-card">
+          <summary className="disclosure-summary">
+            <div className="disclosure-summary-main">
+              <p className="eyebrow">Create racer</p>
+              <h3>Add Driver</h3>
+              <p className="list-meta">Open the form only when you need to add a new driver record.</p>
+            </div>
+            <span className="chip disclosure-chip">New</span>
+          </summary>
+          <div className="disclosure-content">
+            <form action={createRacerAction} className="event-create-form">
+              <label className="form-field">
+                <span>First name</span>
+                <input name="firstName" required type="text" />
+              </label>
+              <label className="form-field">
+                <span>Last name</span>
+                <input name="lastName" required type="text" />
+              </label>
+              <label className="form-field">
+                <span>Display name</span>
+                <input name="displayName" placeholder="Optional override" type="text" />
+              </label>
+              <label className="form-field">
+                <span>Garage</span>
+                <input name="garageName" placeholder="Independent" type="text" />
+              </label>
+              <label className="form-field">
+                <span>Status</span>
+                <select defaultValue="active" name="status">
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </label>
+              <FormSubmitButton
+                className="button primary compact-button"
+                idleLabel="Create Racer"
+                pendingLabel="Creating..."
+              />
+            </form>
+          </div>
+        </details>
       ) : null}
 
       <div className="stack">
         {activeRacers.map((racer) => (
-          <article className="feature-card" key={racer.id}>
-            <div className="split-row">
-              <div>
+          <details className="feature-card disclosure-card" key={racer.id}>
+            <summary className="disclosure-summary">
+              <div className="disclosure-summary-main">
                 <p className="list-title">{racer.displayName}</p>
                 <p className="list-meta">
                   {racer.garageName} • {racer.status}
                 </p>
               </div>
-              <div className="chip-row">
+              <div className="chip-row wrap-row disclosure-actions">
                 <span className="chip">Cars: {racer.carCount}</span>
                 <span className="chip">Wins: {racer.totalWins}</span>
                 <span className="chip">Active regs: {racer.activeRegistrationCount}</span>
               </div>
-            </div>
+            </summary>
             {canManageRacers ? (
-              <div className="stack compact">
+              <div className="disclosure-content stack compact">
                 <form action={updateRacerAction} className="event-create-form">
                   <input name="racerId" type="hidden" value={racer.id} />
                   <label className="form-field">
@@ -149,13 +157,20 @@ export default async function RacersPage({
                     <p className="list-meta">No cars added for this racer yet.</p>
                   )}
                   {racer.canAddCars ? (
-                    <CarCreationForm
-                      action={createRacerCarAction}
-                      aiIdentifyEnabled={aiIdentifyEnabled}
-                      fixedOwnerRacerId={racer.id}
-                      pendingLabel="Adding..."
-                      submitLabel="Add Car"
-                    />
+                    <details className="disclosure-inline">
+                      <summary className="button secondary compact-button disclosure-inline-trigger">
+                        Add Car
+                      </summary>
+                      <div className="disclosure-content">
+                        <CarCreationForm
+                          action={createRacerCarAction}
+                          aiIdentifyEnabled={aiIdentifyEnabled}
+                          fixedOwnerRacerId={racer.id}
+                          pendingLabel="Adding..."
+                          submitLabel="Add Car"
+                        />
+                      </div>
+                    </details>
                   ) : null}
                 </div>
                 <form action={archiveRacerAction} className="status-form">
@@ -174,7 +189,7 @@ export default async function RacersPage({
                 </form>
               </div>
             ) : null}
-          </article>
+          </details>
         ))}
       </div>
 
@@ -184,73 +199,75 @@ export default async function RacersPage({
           <h3>Archived Racers</h3>
           <div className="stack compact">
             {archivedRacers.map((racer) => (
-              <article className="feature-card" key={racer.id}>
-                <div className="split-row">
-                  <div>
+              <details className="feature-card disclosure-card" key={racer.id}>
+                <summary className="disclosure-summary">
+                  <div className="disclosure-summary-main">
                     <p className="list-title">{racer.displayName}</p>
                     <p className="list-meta">
                       {racer.garageName} • {racer.status}
                     </p>
                   </div>
-                  <div className="chip-row">
+                  <div className="chip-row wrap-row disclosure-actions">
                     <span className="chip">Cars: {racer.carCount}</span>
                     <span className="chip">Wins: {racer.totalWins}</span>
                   </div>
+                </summary>
+                <div className="disclosure-content stack compact">
+                  {racer.cars.length > 0 ? (
+                    <div className="card-grid three-up">
+                      {racer.cars.map((car) => (
+                        <article className="mini-card" key={car.id}>
+                          <p className="eyebrow">{car.category}</p>
+                          <h4>{car.nickname}</h4>
+                          <p>
+                            {car.brand} {car.model}
+                          </p>
+                          <div className="chip-row wrap-row">
+                            <span className="chip">{car.className}</span>
+                            <span className="chip">{car.status}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="list-meta">No cars on record.</p>
+                  )}
+                  {canManageRacers ? (
+                    <form action={updateRacerAction} className="event-create-form">
+                      <input name="racerId" type="hidden" value={racer.id} />
+                      <label className="form-field">
+                        <span>First name</span>
+                        <input defaultValue={racer.firstName} name="firstName" required type="text" />
+                      </label>
+                      <label className="form-field">
+                        <span>Last name</span>
+                        <input defaultValue={racer.lastName} name="lastName" required type="text" />
+                      </label>
+                      <label className="form-field">
+                        <span>Display name</span>
+                        <input defaultValue={racer.displayName} name="displayName" type="text" />
+                      </label>
+                      <label className="form-field">
+                        <span>Garage</span>
+                        <input defaultValue={racer.garageNameValue} name="garageName" type="text" />
+                      </label>
+                      <label className="form-field">
+                        <span>Status</span>
+                        <select defaultValue={racer.statusValue} name="status">
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                          <option value="archived">Archived</option>
+                        </select>
+                      </label>
+                      <FormSubmitButton
+                        className="button secondary compact-button"
+                        idleLabel="Save Racer"
+                        pendingLabel="Saving..."
+                      />
+                    </form>
+                  ) : null}
                 </div>
-                {racer.cars.length > 0 ? (
-                  <div className="card-grid three-up">
-                    {racer.cars.map((car) => (
-                      <article className="mini-card" key={car.id}>
-                        <p className="eyebrow">{car.category}</p>
-                        <h4>{car.nickname}</h4>
-                        <p>
-                          {car.brand} {car.model}
-                        </p>
-                        <div className="chip-row wrap-row">
-                          <span className="chip">{car.className}</span>
-                          <span className="chip">{car.status}</span>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="list-meta">No cars on record.</p>
-                )}
-                {canManageRacers ? (
-                  <form action={updateRacerAction} className="event-create-form">
-                    <input name="racerId" type="hidden" value={racer.id} />
-                    <label className="form-field">
-                      <span>First name</span>
-                      <input defaultValue={racer.firstName} name="firstName" required type="text" />
-                    </label>
-                    <label className="form-field">
-                      <span>Last name</span>
-                      <input defaultValue={racer.lastName} name="lastName" required type="text" />
-                    </label>
-                    <label className="form-field">
-                      <span>Display name</span>
-                      <input defaultValue={racer.displayName} name="displayName" type="text" />
-                    </label>
-                    <label className="form-field">
-                      <span>Garage</span>
-                      <input defaultValue={racer.garageNameValue} name="garageName" type="text" />
-                    </label>
-                    <label className="form-field">
-                      <span>Status</span>
-                      <select defaultValue={racer.statusValue} name="status">
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="archived">Archived</option>
-                      </select>
-                    </label>
-                    <FormSubmitButton
-                      className="button secondary compact-button"
-                      idleLabel="Save Racer"
-                      pendingLabel="Saving..."
-                    />
-                  </form>
-                ) : null}
-              </article>
+              </details>
             ))}
           </div>
         </section>

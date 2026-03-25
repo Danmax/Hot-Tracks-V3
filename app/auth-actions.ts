@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  createSessionCookieValue,
   hashPassword,
   normalizeEmail,
   SESSION_COOKIE,
@@ -25,7 +26,7 @@ function makeSlug(value: string) {
 
 async function createSession(userId: string) {
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, userId, {
+  cookieStore.set(SESSION_COOKIE, createSessionCookieValue(userId), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
