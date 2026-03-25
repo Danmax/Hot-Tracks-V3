@@ -32,6 +32,17 @@ import type {
   TimingMode,
 } from "@/lib/types";
 
+type TournamentAiSuggestion = {
+  eventName?: string;
+  description?: string;
+  categorySummary?: string;
+  structureSummary?: string;
+  seedingMode?: string;
+  matchRaceCount?: number;
+  tiePolicy?: string;
+  status?: string;
+};
+
 function revalidateEventViews(eventId?: string) {
   revalidatePath("/");
   revalidatePath("/admin");
@@ -40,6 +51,64 @@ function revalidateEventViews(eventId?: string) {
   if (eventId) {
     revalidatePath(`/events/${eventId}`);
   }
+}
+
+function extractTextResponse(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  if ("output_text" in payload && typeof payload.output_text === "string") {
+    return payload.output_text;
+  }
+
+  if (!("output" in payload) || !Array.isArray(payload.output)) {
+    return "";
+  }
+
+  const chunks: string[] = [];
+  for (const item of payload.output) {
+    if (!item || typeof item !== "object" || !("content" in item) || !Array.isArray(item.content)) {
+      continue;
+    }
+
+    for (const content of item.content) {
+      if (
+        content &&
+        typeof content === "object" &&
+        "type" in content &&
+        content.type === "output_text" &&
+        "text" in content &&
+        typeof content.text === "string"
+      ) {
+        chunks.push(content.text);
+      }
+    }
+  }
+
+  return chunks.join("\n").trim();
+}
+
+function parseJsonBlock(value: string) {
+  const fencedMatch = value.match(/```json\s*([\s\S]+?)```/i);
+  return JSON.parse(fencedMatch?.[1] ?? value) as TournamentAiSuggestion;
+}
+
+function normalizeAiSuggestion(value: TournamentAiSuggestion) {
+  return {
+    eventName: typeof value.eventName === "string" ? value.eventName.trim() : "",
+    description: typeof value.description === "string" ? value.description.trim() : "",
+    categorySummary: typeof value.categorySummary === "string" ? value.categorySummary.trim() : "",
+    structureSummary: typeof value.structureSummary === "string" ? value.structureSummary.trim() : "",
+    seedingMode:
+      value.seedingMode === "random_draw" || value.seedingMode === "qualifier_split"
+        ? value.seedingMode
+        : "standard_seeded",
+    matchRaceCount: value.matchRaceCount === 2 || value.matchRaceCount === 3 ? value.matchRaceCount : 1,
+    tiePolicy: value.tiePolicy === "official_review" ? "official_review" : "rerun",
+    status:
+      value.status === "registration_open" || value.status === "checkin" ? value.status : "draft",
+  };
 }
 
 export async function createEventAction(formData: FormData) {
@@ -92,6 +161,183 @@ export async function createEventAction(formData: FormData) {
     redirect(buildFlashPath("/events", "success", "Event created"));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to create event";
+    redirect(buildFlashPath("/events", "error", message));
+  }
+}
+
+export async function generateTournamentAiAction(formData: FormData) {
+  const user = await requireRole(["admin", "host"]);
+  const name = formData.get("name");
+  const eventDate = formData.get("eventDate");
+  const trackId = formData.get("trackId");
+  const locationName = formData.get("locationName");
+  const themeDescription = formData.get("themeDescription");
+  const selectedCarIds = formData
+    .getAll("carIds")
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+  if (
+    typeof name !== "string" ||
+    typeof eventDate !== "string" ||
+    typeof trackId !== "string" ||
+    typeof themeDescription !== "string"
+  ) {
+    throw new Error("Event name, date, track, theme, and cars are required");
+  }
+
+  if (selectedCarIds.length < 2) {
+    redirect(buildFlashPath("/events", "error", "Select at least two cars for AI tournament setup"));
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    redirect(buildFlashPath("/events", "error", "Set OPENAI_API_KEY to enable AI tournament setup"));
+  }
+
+  const state = readState();
+  const track = state.tracks.find((item) => item.id === trackId && item.status === "active");
+  if (!track) {
+    redirect(buildFlashPath("/events", "error", "Select an active track"));
+  }
+
+  const selectedCars = selectedCarIds
+    .map((carId) => {
+      const car = state.cars.find((item) => item.id === carId);
+      if (!car) {
+        return null;
+      }
+
+      const racer = state.racerProfiles.find((item) => item.id === car.ownerRacerId);
+      if (!racer || racer.status === "archived") {
+        return null;
+      }
+
+      return {
+        id: car.id,
+        nickname: car.nickname,
+        brand: car.brand,
+        model: car.model,
+        category: car.category ?? "",
+        className: car.className ?? "",
+        racerId: racer.id,
+        racerName: racer.displayName,
+      };
+    })
+    .filter(
+      (
+        value,
+      ): value is {
+        id: string;
+        nickname: string;
+        brand: string;
+        model: string;
+        category: string;
+        className: string;
+        racerId: string;
+        racerName: string;
+      } => Boolean(value),
+    );
+
+  if (selectedCars.length < 2) {
+    redirect(buildFlashPath("/events", "error", "Selected cars must belong to active racers"));
+  }
+
+  try {
+    const openAiResponse = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_CAR_IDENTIFY_MODEL ?? "gpt-5.4",
+        reasoning: { effort: "low" },
+        max_output_tokens: 500,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `Configure a die-cast tournament event from this theme and car list. Return JSON only with keys eventName, description, categorySummary, structureSummary, seedingMode, matchRaceCount, tiePolicy, status.
+
+Theme:
+${themeDescription.trim()}
+
+Event name draft:
+${name.trim()}
+
+Track:
+${track.name} | ${track.laneCount} lanes | ${track.trackLengthInches ?? "unknown"} inches | ${track.locationName ?? "unknown location"}
+
+Selected cars:
+${selectedCars
+  .map(
+    (car) =>
+      `- ${car.racerName}: ${car.nickname} (${car.brand} ${car.model}) category=${car.category || "unassigned"} class=${car.className || "open"}`,
+  )
+  .join("\n")}
+
+Rules:
+- seedingMode must be one of standard_seeded, random_draw, qualifier_split
+- matchRaceCount must be 1, 2, or 3
+- tiePolicy must be rerun or official_review
+- status must be draft, registration_open, or checkin
+- description should be concise and host-ready
+- categorySummary should explain recommended groupings or classes for these cars
+- structureSummary should explain why the format fits this theme and field size`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const payload = (await openAiResponse.json()) as unknown;
+    if (!openAiResponse.ok) {
+      const message =
+        payload &&
+        typeof payload === "object" &&
+        "error" in payload &&
+        payload.error &&
+        typeof payload.error === "object" &&
+        "message" in payload.error &&
+        typeof payload.error.message === "string"
+          ? payload.error.message
+          : "OpenAI request failed";
+      redirect(buildFlashPath("/events", "error", message));
+    }
+
+    const ai = normalizeAiSuggestion(parseJsonBlock(extractTextResponse(payload)));
+    const description = [ai.description, `Categories: ${ai.categorySummary}`, `Structure: ${ai.structureSummary}`]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const eventId = createEvent(
+      {
+        name: ai.eventName || name.trim(),
+        eventDate,
+        locationName: typeof locationName === "string" ? locationName.trim() : "",
+        trackId,
+        description,
+        timingMode: track.defaultTimingMode,
+        startMode: track.defaultStartMode,
+        tiePolicy: ai.tiePolicy as TiePolicy,
+        seedingMode: ai.seedingMode as SeedingMode,
+        matchRaceCount: ai.matchRaceCount as 1 | 2 | 3,
+        status: ai.status as EventStatus,
+      },
+      user.id,
+    );
+
+    selectedCars.forEach((car) => {
+      createEventRegistration(eventId, car.racerId, car.id, user.id);
+    });
+
+    revalidateEventViews(eventId);
+    redirect(buildFlashPath(`/events/${eventId}`, "success", "AI tournament created"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to generate AI tournament";
     redirect(buildFlashPath("/events", "error", message));
   }
 }

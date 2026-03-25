@@ -7,11 +7,13 @@ import {
   createEventAction,
   createEventAssignmentAction,
   deleteEventAction,
+  generateTournamentAiAction,
   removeEventAssignmentAction,
   updateEventDetailsAction,
   updateEventStatusAction,
 } from "@/app/(app)/events/actions";
 import { getEventList } from "@/lib/view-models";
+import { readState } from "@/lib/phase1-repository";
 import type { FlashTone } from "@/lib/flash";
 
 export default async function EventsPage({
@@ -22,6 +24,35 @@ export default async function EventsPage({
   const resolvedSearchParams = await searchParams;
   const user = await requireUser();
   const events = getEventList();
+  const state = readState();
+  const trackOptions = state.tracks
+    .filter((track) => track.status === "active")
+    .map((track) => ({
+      id: track.id,
+      label: `${track.name} • ${track.trackLengthInches ? `${track.trackLengthInches} in` : "TBD"} • ${track.laneCount}-lane`,
+    }));
+  const tournamentCars = state.cars
+    .filter((car) => car.status !== "archived")
+    .map((car) => {
+      const racer = state.racerProfiles.find((item) => item.id === car.ownerRacerId);
+      if (!racer || racer.status === "archived") {
+        return null;
+      }
+
+      return {
+        id: car.id,
+        label: `${car.nickname} • ${car.brand} ${car.model}`,
+        owner: racer.displayName,
+        category: car.category ?? "Unassigned",
+        className: car.className ?? "Open",
+      };
+    })
+    .filter(
+      (
+        value,
+      ): value is { id: string; label: string; owner: string; category: string; className: string } =>
+        Boolean(value),
+    );
   const canOperateEvents = ["admin", "host", "official"].includes(user.role);
   const canManageEvents = ["admin", "host"].includes(user.role);
   const manageableEventIds = canManageEvents ? await getAccessibleEventIds("manage") : new Set<string>();
@@ -69,7 +100,7 @@ export default async function EventsPage({
                   <option disabled value="">
                     Select track
                   </option>
-                  {events[0]?.trackOptions.map((track) => (
+                  {trackOptions.map((track) => (
                     <option key={track.id} value={track.id}>
                       {track.label}
                     </option>
@@ -133,6 +164,85 @@ export default async function EventsPage({
                 className="button primary compact-button"
                 idleLabel="Create Event"
                 pendingLabel="Creating..."
+              />
+            </form>
+          </div>
+        </details>
+      ) : null}
+
+      {canManageEvents ? (
+        <details className="feature-card disclosure-card">
+          <summary className="disclosure-summary">
+            <div className="disclosure-summary-main">
+              <p className="eyebrow">AI planner</p>
+              <h3>Generate Tournament AI</h3>
+              <p className="list-meta">
+                Select cars and describe the tournament theme. AI will create the event structure and
+                register the selected field.
+              </p>
+            </div>
+            <span className="chip disclosure-chip">AI</span>
+          </summary>
+          <div className="disclosure-content">
+            <form action={generateTournamentAiAction} className="event-create-form">
+              <label className="form-field">
+                <span>Event name</span>
+                <input name="name" placeholder="Retro Muscle Cup" required type="text" />
+              </label>
+              <label className="form-field">
+                <span>Date</span>
+                <input name="eventDate" required type="date" />
+              </label>
+              <label className="form-field">
+                <span>Location</span>
+                <input name="locationName" placeholder="Garage or venue" type="text" />
+              </label>
+              <label className="form-field">
+                <span>Track</span>
+                <select defaultValue="" name="trackId" required>
+                  <option disabled value="">
+                    Select track
+                  </option>
+                  {trackOptions.map((track) => (
+                    <option key={track.id} value={track.id}>
+                      {track.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-field form-field-span-full">
+                <span>Tournament theme</span>
+                <textarea
+                  name="themeDescription"
+                  placeholder="Example: Build a family-friendly stock vs modified rivalry night with simple seeding and short matches."
+                  required
+                  rows={4}
+                />
+              </label>
+              <div className="form-note form-field-span-full">
+                <p className="list-title">Selected cars</p>
+                <p className="list-meta">
+                  Choose at least two cars. The AI planner uses the field makeup and theme description to
+                  recommend structure, categories, and registration setup.
+                </p>
+                <div className="card-grid three-up">
+                  {tournamentCars.map((car) => (
+                    <label className="mini-card selectable-card" key={car.id}>
+                      <input className="selection-checkbox" name="carIds" type="checkbox" value={car.id} />
+                      <div>
+                        <p className="list-title">{car.label}</p>
+                        <p className="list-meta">
+                          {car.owner} • {car.category} • {car.className}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <FormSubmitButton
+                className="button primary compact-button"
+                idleLabel="Generate AI Tournament"
+                pendingLabel="Planning..."
               />
             </form>
           </div>

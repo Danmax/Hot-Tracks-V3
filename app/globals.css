@@ -809,6 +809,20 @@ p {
   display: none;
 }
 
+.selectable-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  cursor: pointer;
+}
+
+.selection-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
 .stack {
   display: grid;
   gap: 14px;

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { updateState } from "@/lib/phase1-repository";
+import { phase1SeedState } from "@/lib/phase1-store";
 import type {
   CarStatus,
   EventAssignmentRole,
@@ -563,6 +564,8 @@ export function createEvent(
   },
   actorUserId: string,
 ) {
+  let createdEventId = "";
+
   updateState((state) => {
     const track = getTrackById(state, input.trackId);
     if (!track || track.status === "archived") {
@@ -570,6 +573,7 @@ export function createEvent(
     }
 
     const eventId = `e_${makeSlug(input.name)}_${Date.now().toString().slice(-6)}`;
+    createdEventId = eventId;
 
     state.events.push({
       id: eventId,
@@ -620,6 +624,8 @@ export function createEvent(
 
     return state;
   });
+
+  return createdEventId;
 }
 
 export function createRacerProfile(
@@ -1083,6 +1089,104 @@ export function updateEventDetails(
       tiePolicy: event.tiePolicy,
       seedingMode: event.seedingMode,
       matchRaceCount: event.matchRaceCount,
+    });
+
+    return state;
+  });
+}
+
+export function clearSampleData(actorUserId: string) {
+  updateState((state) => {
+    const seedUserIds = new Set(phase1SeedState.users.map((user) => user.id));
+    const seedRacerIds = new Set(phase1SeedState.racerProfiles.map((racer) => racer.id));
+    const seedCarIds = new Set(phase1SeedState.cars.map((car) => car.id));
+    const seedTrackIds = new Set(phase1SeedState.tracks.map((track) => track.id));
+    const seedEventIds = new Set(phase1SeedState.events.map((event) => event.id));
+    const seedAssignmentIds = new Set(phase1SeedState.eventAssignments.map((assignment) => assignment.id));
+    const seedRegistrationIds = new Set(
+      phase1SeedState.eventRegistrations.map((registration) => registration.id),
+    );
+    const seedTournamentIds = new Set(phase1SeedState.tournaments.map((tournament) => tournament.id));
+    const seededMatchIds = new Set(phase1SeedState.matches.map((match) => match.id));
+    const seededHeatIds = new Set(phase1SeedState.heats.map((heat) => heat.id));
+
+    const eventIdsToRemove = new Set(
+      state.events.filter((event) => seedEventIds.has(event.id)).map((event) => event.id),
+    );
+    const tournamentIdsToRemove = new Set(
+      state.tournaments
+        .filter((tournament) => seedTournamentIds.has(tournament.id) || eventIdsToRemove.has(tournament.eventId))
+        .map((tournament) => tournament.id),
+    );
+    const matchIdsToRemove = new Set(
+      state.matches
+        .filter((match) => seededMatchIds.has(match.id) || tournamentIdsToRemove.has(match.tournamentId))
+        .map((match) => match.id),
+    );
+    const heatIdsToRemove = new Set(
+      state.heats
+        .filter((heat) => seededHeatIds.has(heat.id) || matchIdsToRemove.has(heat.matchId))
+        .map((heat) => heat.id),
+    );
+    const assignmentIdsToRemove = new Set(
+      state.eventAssignments
+        .filter((assignment) => seedAssignmentIds.has(assignment.id) || eventIdsToRemove.has(assignment.eventId))
+        .map((assignment) => assignment.id),
+    );
+    const registrationIdsToRemove = new Set(
+      state.eventRegistrations
+        .filter(
+          (registration) =>
+            seedRegistrationIds.has(registration.id) || eventIdsToRemove.has(registration.eventId),
+        )
+        .map((registration) => registration.id),
+    );
+
+    state.users = state.users.filter((user) => !seedUserIds.has(user.id) || user.id === actorUserId);
+    state.racerProfiles = state.racerProfiles.filter((racer) => !seedRacerIds.has(racer.id));
+    state.cars = state.cars.filter(
+      (car) => !seedCarIds.has(car.id) && !seedRacerIds.has(car.ownerRacerId),
+    );
+    state.events = state.events.filter((event) => !eventIdsToRemove.has(event.id));
+    state.eventAssignments = state.eventAssignments.filter(
+      (assignment) => !assignmentIdsToRemove.has(assignment.id),
+    );
+    state.eventRegistrations = state.eventRegistrations.filter(
+      (registration) => !registrationIdsToRemove.has(registration.id),
+    );
+    state.tournaments = state.tournaments.filter((tournament) => !tournamentIdsToRemove.has(tournament.id));
+    state.matches = state.matches.filter((match) => !matchIdsToRemove.has(match.id));
+    state.heats = state.heats.filter((heat) => !heatIdsToRemove.has(heat.id));
+    state.laneResults = state.laneResults.filter((laneResult) => !heatIdsToRemove.has(laneResult.heatId));
+
+    const remainingTrackIds = new Set(state.events.map((event) => event.trackId).filter(Boolean));
+    state.tracks = state.tracks.filter(
+      (track) => !seedTrackIds.has(track.id) || remainingTrackIds.has(track.id),
+    );
+
+    state.auditLogs = state.auditLogs.filter((log) => {
+      if (seedUserIds.has(log.entityId) && log.entityId !== actorUserId) {
+        return false;
+      }
+
+      return !(
+        seedRacerIds.has(log.entityId) ||
+        seedCarIds.has(log.entityId) ||
+        eventIdsToRemove.has(log.entityId) ||
+        assignmentIdsToRemove.has(log.entityId) ||
+        registrationIdsToRemove.has(log.entityId) ||
+        tournamentIdsToRemove.has(log.entityId) ||
+        matchIdsToRemove.has(log.entityId) ||
+        heatIdsToRemove.has(log.entityId) ||
+        (seedTrackIds.has(log.entityId) && !remainingTrackIds.has(log.entityId))
+      );
+    });
+
+    appendAudit(state, actorUserId, "system", "seed_data", "sample_data_cleared", {
+      removedSeedEvents: eventIdsToRemove.size,
+      removedSeedRacers: seedRacerIds.size,
+      removedSeedCars: seedCarIds.size,
+      removedSeedTracks: phase1SeedState.tracks.length - state.tracks.filter((track) => seedTrackIds.has(track.id)).length,
     });
 
     return state;
